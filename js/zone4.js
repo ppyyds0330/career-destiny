@@ -53,13 +53,24 @@ function renderZone4() {
 function renderResumeChecker() {
   const content = document.getElementById('z4Content');
   const savedChecks = JSON.parse(localStorage.getItem('cd-resume-checks') || '{}');
+  const apiKey = localStorage.getItem('cd-claude-api-key') || '';
 
   content.innerHTML = `
-    <div style="margin-bottom:24px;">
-      <p style="font-size:0.9rem;color:var(--text-dim);line-height:1.9;text-align:center;">
-        逐项检查你的简历，勾选已完成的条目。<br>
-        完成后系统会给出<strong style="color:var(--gold-light);">综合评分</strong>和改进建议。
-      </p>
+    <!-- AI Upload Section -->
+    <div style="border:1px solid rgba(126,168,200,0.2);border-radius:4px;padding:20px 22px;margin-bottom:24px;position:relative;background:rgba(126,168,200,0.03);">
+      <button class="ai-settings-toggle ${apiKey ? 'configured' : ''}" onclick="event.stopPropagation();showApiKeyModal();" title="设置 API Key">⚙️</button>
+      <h4 style="color:var(--accent-blue);font-size:0.9rem;letter-spacing:0.08em;margin-bottom:4px;">🤖 AI 智能分析</h4>
+      <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px;">上传你的简历文件（PDF/图片），AI 会深度分析并给出专业改进建议。</p>
+
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click();">
+        <div class="upload-icon">📤</div>
+        <div class="upload-text" id="uploadText">点击上传或拖拽简历到此处</div>
+        <div class="upload-hint">支持 PDF / PNG / JPG，文件大小不超过 10MB</div>
+        <button class="remove-file-btn" id="removeFileBtn" onclick="event.stopPropagation();clearUpload();">✕</button>
+        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none;" onchange="handleFileSelect(event);">
+      </div>
+
+      <div id="aiStatus" style="margin-top:12px;"></div>
     </div>
 
     <!-- Score Display -->
@@ -72,6 +83,23 @@ function renderResumeChecker() {
     <h4 style="color:var(--gold-light);font-size:0.95rem;letter-spacing:0.1em;margin:28px 0 14px;">📝 行业简历模板</h4>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" id="templateContainer"></div>
   `;
+
+  // Drag and drop
+  setTimeout(() => {
+    const zone = document.getElementById('uploadZone');
+    if (!zone) return;
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => { zone.classList.remove('dragover'); });
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) processUploadedFile(file);
+    });
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+      if (e.target.files[0]) processUploadedFile(e.target.files[0]);
+    });
+  }, 100);
 
   // Render checklist
   const checklistDiv = document.getElementById('checklistContainer');
@@ -145,6 +173,375 @@ function updateResumeScore(savedChecks) {
     <div style="font-size:2.5rem;font-weight:700;color:var(--gold-light);">${pct}%</div>
     <div style="font-size:0.9rem;color:var(--gold-dim);letter-spacing:0.1em;margin-top:4px;">${grade}</div>
     <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px;">${earned}/${totalWeight} 分</div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+//  AI Resume Analysis Functions
+// ══════════════════════════════════════════════
+
+function showApiKeyModal() {
+  const existing = document.querySelector('.api-modal-overlay');
+  if (existing) existing.remove();
+
+  const apiKey = localStorage.getItem('cd-claude-api-key') || '';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'api-modal-overlay';
+  overlay.innerHTML = `
+    <div class="api-modal">
+      <h4>⚙️ 设置 Anthropic API Key</h4>
+      <p>使用 Claude AI 分析简历需要你提供自己的 API Key。<br>
+      前往 <a href="https://console.anthropic.com/" target="_blank" style="color:var(--accent-blue);">console.anthropic.com</a> 创建密钥，然后粘贴到下方。<br>
+      <span style="font-size:0.7rem;opacity:0.6;">密钥仅存储在你的浏览器本地，不会上传到任何服务器。</span></p>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." value="${apiKey.replace(/"/g,'&quot;')}" style="
+        width:100%;padding:8px 12px;font-size:0.82rem;font-family:inherit;letter-spacing:0.04em;
+        background:rgba(255,255,255,0.04);border:1px solid rgba(200,169,110,0.3);border-radius:2px;
+        color:var(--text);outline:none;box-sizing:border-box;
+      " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(200,169,110,0.3)'">
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+        <button id="apiKeyClearBtn" style="
+          padding:6px 16px;font-size:0.75rem;font-family:inherit;letter-spacing:0.06em;
+          border:1px solid rgba(200,138,126,0.3);border-radius:2px;background:transparent;
+          color:var(--accent-red);cursor:pointer;
+        ">清除</button>
+        <button id="apiKeySaveBtn" class="btn-primary" style="max-width:100px;">保存</button>
+      </div>
+      ${apiKey ? '<div style="font-size:0.7rem;color:var(--accent-green);margin-top:8px;text-align:right;">✓ 已配置</div>' : ''}
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  document.getElementById('apiKeySaveBtn').addEventListener('click', () => {
+    const key = document.getElementById('apiKeyInput').value.trim();
+    if (key) {
+      localStorage.setItem('cd-claude-api-key', key);
+    } else {
+      localStorage.removeItem('cd-claude-api-key');
+    }
+    overlay.remove();
+    renderResumeChecker();
+  });
+
+  document.getElementById('apiKeyClearBtn').addEventListener('click', () => {
+    localStorage.removeItem('cd-claude-api-key');
+    overlay.remove();
+    renderResumeChecker();
+  });
+
+  // Focus input
+  setTimeout(() => document.getElementById('apiKeyInput').focus(), 100);
+}
+
+function handleFileSelect(event) {
+  const file = event.target.files[0];
+  if (file) processUploadedFile(file);
+}
+
+function clearUpload() {
+  const fileInput = document.getElementById('fileInput');
+  const zone = document.getElementById('uploadZone');
+  const text = document.getElementById('uploadText');
+  const status = document.getElementById('aiStatus');
+  if (fileInput) fileInput.value = '';
+  if (zone) zone.classList.remove('has-file');
+  if (text) text.textContent = '点击上传或拖拽简历到此处';
+  if (status) status.innerHTML = '';
+}
+
+async function processUploadedFile(file) {
+  const status = document.getElementById('aiStatus');
+  const zone = document.getElementById('uploadZone');
+  const text = document.getElementById('uploadText');
+
+  if (file.size > 10 * 1024 * 1024) {
+    if (status) status.innerHTML = '<div style="color:var(--accent-red);font-size:0.8rem;padding:8px 0;">文件过大，请选择小于 10MB 的文件</div>';
+    return;
+  }
+
+  zone.classList.add('has-file');
+  text.textContent = `📄 ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+
+  status.innerHTML = `
+    <div class="ai-loading">
+      <div class="ai-spinner"></div>
+      <div style="font-size:0.8rem;color:var(--text-dim);">正在解析文件...</div>
+    </div>
+  `;
+
+  try {
+    const ext = file.name.split('.').pop().toLowerCase();
+    let content, fileType;
+
+    if (ext === 'pdf') {
+      content = await extractPdfText(file);
+      fileType = 'text';
+    } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
+      content = await fileToBase64(file);
+      fileType = 'image';
+    } else {
+      content = await fileToBase64(file);
+      fileType = 'image';
+    }
+
+    await analyzeResume(content, fileType, file.name);
+  } catch (err) {
+    console.error('File processing error:', err);
+    status.innerHTML = `<div style="color:var(--accent-red);font-size:0.8rem;padding:8px 0;">解析失败：${err.message}</div>`;
+  }
+}
+
+async function extractPdfText(file) {
+  if (!window.pdfjsLib) {
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = () => {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        resolve();
+      };
+      script.onerror = () => reject(new Error('PDF 解析库加载失败，请检查网络'));
+      document.head.appendChild(script);
+    });
+  }
+
+  const arrayBuffer = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+
+  const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const textContent = await page.getTextContent();
+    const pageText = textContent.items.map(it => it.str).join(' ');
+    fullText += pageText + '\n';
+  }
+
+  if (!fullText.trim()) throw new Error('未能从 PDF 中提取文字，请确认 PDF 包含可选中文本（非扫描图片）');
+  return fullText;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function analyzeResume(content, fileType, fileName) {
+  const status = document.getElementById('aiStatus');
+  const apiKey = localStorage.getItem('cd-claude-api-key');
+
+  if (!apiKey) {
+    showApiKeyModal();
+    status.innerHTML = '<div style="color:var(--accent-red);font-size:0.8rem;padding:8px 0;">请先设置 API Key 后再分析</div>';
+    return;
+  }
+
+  status.innerHTML = `
+    <div class="ai-loading">
+      <div class="ai-spinner"></div>
+      <div style="font-size:0.8rem;color:var(--text-dim);">AI 正在深度分析你的简历...</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);opacity:0.6;">这可能需要 15-30 秒</div>
+    </div>
+  `;
+
+  const systemPrompt = `你是一位资深HR和简历优化专家，拥有10年以上招聘经验。请对简历进行深度专业分析。
+
+请严格按以下JSON格式回复（不要包含任何其他文字，只输出JSON）：
+{
+  "overallScore": 85,
+  "summary": "整体评价，2-3句话",
+  "strengths": ["亮点1", "亮点2", "亮点3"],
+  "weaknesses": ["待改进1", "待改进2", "待改进3"],
+  "sections": [
+    {"name": "个人信息", "score": 80, "comment": "一句话评价"},
+    {"name": "教育背景", "score": 75, "comment": "一句话评价"},
+    {"name": "工作/实习经历", "score": 70, "comment": "一句话评价"},
+    {"name": "项目经历", "score": 85, "comment": "一句话评价"},
+    {"name": "技能与证书", "score": 90, "comment": "一句话评价"},
+    {"name": "排版与格式", "score": 65, "comment": "一句话评价"}
+  ],
+  "keywordOptimization": "关键词优化建议，如何让简历更容易被ATS/HR筛选到",
+  "actionPlan": ["具体改进步骤1", "改进步骤2", "改进步骤3"]
+}
+
+评分标准：
+- 90-100：简历教科书级别，几乎无需修改
+- 75-89：整体不错，有几个小地方可以优化
+- 60-74：中等水平，需要较多改进
+- 40-59：有不少问题，建议大幅修改
+- 40以下：需要从结构上重新组织
+
+请用中文回复，评价要具体、可操作。`;
+
+  try {
+    const messages = [{ role: 'user', content: [] }];
+
+    if (fileType === 'image') {
+      const mimeType = content.match(/^data:(image\/\w+);/)?.[1] || 'image/jpeg';
+      messages[0].content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: mimeType, data: content.split(',')[1] }
+      });
+      messages[0].content.push({
+        type: 'text',
+        text: '请分析这份简历的图片，给出详细专业评价和改进建议。请按指定的JSON格式回复。'
+      });
+    } else {
+      messages[0].content.push({
+        type: 'text',
+        text: `请分析以下简历内容（文件名：${fileName}）：\n\n${content.substring(0, 18000)}`
+      });
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: messages
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        localStorage.removeItem('cd-claude-api-key');
+        throw new Error('API Key 无效，请重新设置');
+      } else if (response.status === 429) {
+        throw new Error('请求太频繁，请稍后重试');
+      } else if (response.status === 403) {
+        throw new Error('API Key 没有权限，请检查账户余额和权限');
+      } else {
+        throw new Error(errData.error?.message || `请求失败 (${response.status})`);
+      }
+    }
+
+    const data = await response.json();
+    const replyText = data.content[0].text;
+
+    let result;
+    const jsonMatch = replyText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        result = JSON.parse(jsonMatch[0]);
+      } catch (e) {
+        renderAiRawResult(replyText);
+        return;
+      }
+    } else {
+      renderAiRawResult(replyText);
+      return;
+    }
+
+    renderAiResult(result);
+
+  } catch (err) {
+    console.error('API error:', err);
+    status.innerHTML = `
+      <div style="color:var(--accent-red);font-size:0.82rem;line-height:1.8;padding:8px 0;">
+        <strong>分析失败：</strong>${err.message.replace(/</g,'&lt;')}<br>
+        <span style="font-size:0.72rem;opacity:0.7;">请检查网络连接和 API Key 是否有效</span>
+        <button onclick="clearUpload()" style="display:block;margin-top:8px;font-size:0.72rem;font-family:inherit;color:var(--gold-light);background:transparent;border:1px solid rgba(200,169,110,0.3);border-radius:2px;padding:4px 12px;cursor:pointer;">重新上传</button>
+      </div>
+    `;
+  }
+}
+
+function renderAiResult(result) {
+  const status = document.getElementById('aiStatus');
+  const score = result.overallScore || 0;
+  const scoreColor = score >= 80 ? 'var(--accent-green)' : score >= 60 ? 'var(--gold-light)' : 'var(--accent-red)';
+  const gradeLabel = score >= 90 ? '教科书级别' : score >= 80 ? '优秀' : score >= 60 ? '良好' : score >= 40 ? '需改进' : '建议重写';
+
+  status.innerHTML = `
+    <div class="ai-result">
+      <div class="ai-result-header">
+        <div class="ai-result-score" style="border-color:${scoreColor};color:${scoreColor};font-size:1.3rem;">${score}</div>
+        <div style="flex:1;">
+          <div style="font-size:1rem;color:var(--gold-light);letter-spacing:0.06em;">🤖 AI 深度分析报告</div>
+          <div style="font-size:0.7rem;color:${scoreColor};margin-top:2px;">综合评分 · ${gradeLabel}</div>
+        </div>
+        <button onclick="clearUpload()" style="font-size:0.68rem;font-family:inherit;color:var(--text-dim);background:transparent;border:1px solid rgba(200,169,110,0.2);border-radius:2px;padding:4px 10px;cursor:pointer;">重新上传</button>
+      </div>
+
+      <div class="ai-result-body">
+        <div style="margin-bottom:14px;line-height:1.9;color:#b8b0a0;">${result.summary || ''}</div>
+
+        ${result.strengths && result.strengths.length ? `
+          <h5>✅ 亮点</h5>
+          <ul style="margin:0 0 16px;padding-left:18px;">
+            ${result.strengths.map(s => `<li style="font-size:0.82rem;line-height:1.9;"><span class="highlight-good">${s}</span></li>`).join('')}
+          </ul>
+        ` : ''}
+
+        ${result.weaknesses && result.weaknesses.length ? `
+          <h5>⚠️ 待改进</h5>
+          <ul style="margin:0 0 16px;padding-left:18px;">
+            ${result.weaknesses.map(w => `<li style="font-size:0.82rem;line-height:1.9;"><span class="highlight-bad">${w}</span></li>`).join('')}
+          </ul>
+        ` : ''}
+
+        ${result.sections && result.sections.length ? `
+          <h5>📋 逐项评分</h5>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+            ${result.sections.map(sec => `
+              <div style="background:rgba(255,255,255,0.02);padding:10px 12px;border-radius:2px;border:1px solid rgba(255,255,255,0.03);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                  <span style="font-size:0.78rem;color:var(--text-dim);">${sec.name}</span>
+                  <span style="font-size:0.78rem;font-weight:600;color:${(sec.score || 0) >= 80 ? 'var(--accent-green)' : (sec.score || 0) >= 60 ? 'var(--gold-light)' : 'var(--accent-red)'};">${sec.score}分</span>
+                </div>
+                <div style="font-size:0.72rem;color:var(--text-dim);opacity:0.7;">${sec.comment || ''}</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        ${result.keywordOptimization ? `
+          <h5>🔑 关键词优化</h5>
+          <div style="font-size:0.82rem;color:#b8b0a0;line-height:1.8;margin-bottom:16px;">${result.keywordOptimization}</div>
+        ` : ''}
+
+        ${result.actionPlan && result.actionPlan.length ? `
+          <h5>📝 行动计划</h5>
+          <ol style="margin:0;padding-left:18px;">
+            ${result.actionPlan.map(a => `<li style="font-size:0.82rem;line-height:1.9;color:#b8b0a0;">${a}</li>`).join('')}
+          </ol>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderAiRawResult(text) {
+  const status = document.getElementById('aiStatus');
+  status.innerHTML = `
+    <div class="ai-result">
+      <div class="ai-result-header">
+        <div style="font-size:1rem;color:var(--gold-light);letter-spacing:0.06em;">🤖 AI 分析报告</div>
+        <button onclick="clearUpload()" style="margin-left:auto;font-size:0.68rem;font-family:inherit;color:var(--text-dim);background:transparent;border:1px solid rgba(200,169,110,0.2);border-radius:2px;padding:4px 10px;cursor:pointer;">重新上传</button>
+      </div>
+      <div class="ai-result-body" style="white-space:pre-wrap;line-height:1.9;">${text.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>
+    </div>
   `;
 }
 
