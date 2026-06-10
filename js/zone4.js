@@ -3,6 +3,8 @@
    Resume review, interview Q&A, mock interview, group cases
    ============================================================ */
 
+console.log('🚀 Zone4 v2 已加载 — 多模型AI简历分析已就绪');
+
 // Zone 4 internal tab state
 let z4tab = 'resume'; // resume | questions | mock | group
 
@@ -61,7 +63,7 @@ function renderResumeChecker() {
     <!-- AI Upload Section -->
     <div style="border:1px solid rgba(126,168,200,0.2);border-radius:4px;padding:20px 22px;margin-bottom:24px;position:relative;background:rgba(126,168,200,0.03);">
       <button class="ai-settings-toggle ${configured ? 'configured' : ''}" onclick="event.stopPropagation();showApiKeyModal();" title="设置 AI 接口">⚙️</button>
-      <h4 style="color:var(--accent-blue);font-size:0.9rem;letter-spacing:0.08em;margin-bottom:4px;">🤖 AI 智能分析${configured ? ' <span style="font-size:0.7rem;color:var(--accent-green);">· '+provName+'</span>' : ''}</h4>
+      <h4 style="color:var(--accent-blue);font-size:0.9rem;letter-spacing:0.08em;margin-bottom:4px;">🤖 AI 智能分析 <span style="font-size:0.6rem;padding:2px 6px;border:1px solid var(--accent-green);border-radius:2px;color:var(--accent-green);vertical-align:middle;">NEW</span>${configured ? ' <span style="font-size:0.7rem;color:var(--accent-green);">· '+provName+'</span>' : ''}</h4>
       <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px;">上传你的简历文件（PDF/图片），AI 会深度分析并给出专业改进建议。</p>
 
       <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click();">
