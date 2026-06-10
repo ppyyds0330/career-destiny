@@ -53,13 +53,15 @@ function renderZone4() {
 function renderResumeChecker() {
   const content = document.getElementById('z4Content');
   const savedChecks = JSON.parse(localStorage.getItem('cd-resume-checks') || '{}');
-  const apiKey = localStorage.getItem('cd-claude-api-key') || '';
+  const cfg = getAiConfig();
+  const configured = !!(cfg.apiKey && cfg.provider);
+  const provName = AI_PROVIDERS[cfg.provider]?.name || '';
 
   content.innerHTML = `
     <!-- AI Upload Section -->
     <div style="border:1px solid rgba(126,168,200,0.2);border-radius:4px;padding:20px 22px;margin-bottom:24px;position:relative;background:rgba(126,168,200,0.03);">
-      <button class="ai-settings-toggle ${apiKey ? 'configured' : ''}" onclick="event.stopPropagation();showApiKeyModal();" title="设置 API Key">⚙️</button>
-      <h4 style="color:var(--accent-blue);font-size:0.9rem;letter-spacing:0.08em;margin-bottom:4px;">🤖 AI 智能分析</h4>
+      <button class="ai-settings-toggle ${configured ? 'configured' : ''}" onclick="event.stopPropagation();showApiKeyModal();" title="设置 AI 接口">⚙️</button>
+      <h4 style="color:var(--accent-blue);font-size:0.9rem;letter-spacing:0.08em;margin-bottom:4px;">🤖 AI 智能分析${configured ? ' <span style="font-size:0.7rem;color:var(--accent-green);">· '+provName+'</span>' : ''}</h4>
       <p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px;">上传你的简历文件（PDF/图片），AI 会深度分析并给出专业改进建议。</p>
 
       <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click();">
@@ -180,26 +182,88 @@ function updateResumeScore(savedChecks) {
 //  AI Resume Analysis Functions
 // ══════════════════════════════════════════════
 
+const AI_PROVIDERS = {
+  deepseek:   { name:'DeepSeek',       endpoint:'https://api.deepseek.com/v1/chat/completions',                    model:'deepseek-chat',     format:'openai', desc:'性价比极高，国内直达' },
+  qwen:       { name:'阿里通义千问',     endpoint:'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model:'qwen-plus',         format:'openai', desc:'阿里云出品，中文理解强' },
+  moonshot:   { name:'月之暗面 Kimi',    endpoint:'https://api.moonshot.cn/v1/chat/completions',                    model:'moonshot-v1-8k',    format:'openai', desc:'长文本处理出色' },
+  glm:        { name:'智谱 ChatGLM',    endpoint:'https://open.bigmodel.cn/api/paas/v4/chat/completions',           model:'glm-4',             format:'openai', desc:'清华系，学术背景扎实' },
+  doubao:     { name:'字节豆包',         endpoint:'https://ark.cn-beijing.volces.com/api/v3/chat/completions',       model:'doubao-pro-32k',    format:'openai', desc:'字节跳动旗下' },
+  anthropic:  { name:'Anthropic Claude',endpoint:'https://api.anthropic.com/v1/messages',                            model:'claude-sonnet-4-6', format:'anthropic', desc:'最强分析能力，需海外访问' },
+  custom:     { name:'自定义接口',        endpoint:'',                                                               model:'',                  format:'openai', desc:'填入任意 OpenAI 兼容接口' }
+};
+
+function getAiConfig() {
+  // Migrate old key to new storage
+  const oldKey = localStorage.getItem('cd-claude-api-key');
+  if (oldKey && !localStorage.getItem('cd-ai-api-key')) {
+    localStorage.setItem('cd-ai-api-key', oldKey);
+    localStorage.setItem('cd-ai-provider', 'anthropic');
+    localStorage.removeItem('cd-claude-api-key');
+  }
+  const provider = localStorage.getItem('cd-ai-provider') || '';
+  const apiKey = localStorage.getItem('cd-ai-api-key') || '';
+  const model = localStorage.getItem('cd-ai-model') || '';
+  const endpoint = localStorage.getItem('cd-ai-endpoint') || '';
+  return { provider, apiKey, model, endpoint };
+}
+
 function showApiKeyModal() {
   const existing = document.querySelector('.api-modal-overlay');
   if (existing) existing.remove();
 
-  const apiKey = localStorage.getItem('cd-claude-api-key') || '';
+  const cfg = getAiConfig();
+  const sel = (p) => cfg.provider === p ? 'selected' : '';
+
+  const providerOpts = Object.entries(AI_PROVIDERS).map(([k,v]) =>
+    `<option value="${k}" ${sel(k)}>${v.name} — ${v.desc}</option>`
+  ).join('');
+
+  const currentProvider = AI_PROVIDERS[cfg.provider];
+  const showCustom = currentProvider && currentProvider.name === '自定义接口';
 
   const overlay = document.createElement('div');
   overlay.className = 'api-modal-overlay';
   overlay.innerHTML = `
-    <div class="api-modal">
-      <h4>⚙️ 设置 Anthropic API Key</h4>
-      <p>使用 Claude AI 分析简历需要你提供自己的 API Key。<br>
-      前往 <a href="https://console.anthropic.com/" target="_blank" style="color:var(--accent-blue);">console.anthropic.com</a> 创建密钥，然后粘贴到下方。<br>
-      <span style="font-size:0.7rem;opacity:0.6;">密钥仅存储在你的浏览器本地，不会上传到任何服务器。</span></p>
-      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." value="${apiKey.replace(/"/g,'&quot;')}" style="
+    <div class="api-modal" style="max-width:480px;">
+      <h4>⚙️ 设置 AI 分析接口</h4>
+      <p style="font-size:0.78rem;color:var(--text-dim);line-height:1.7;margin-bottom:14px;">
+        选择一个 AI 大模型来帮你分析简历。<br>
+        <span style="font-size:0.7rem;opacity:0.6;">密钥仅存储在你的浏览器本地，不会上传到任何服务器。</span>
+      </p>
+
+      <label style="display:block;font-size:0.75rem;color:var(--gold-dim);margin-bottom:4px;letter-spacing:0.06em;">模型选择</label>
+      <select id="providerSelect" style="
+        width:100%;padding:8px 10px;font-size:0.82rem;font-family:inherit;
+        background:rgba(255,255,255,0.04);border:1px solid rgba(200,169,110,0.3);
+        border-radius:2px;color:var(--text);outline:none;box-sizing:border-box;
+        margin-bottom:12px;cursor:pointer;
+      " onchange="onProviderChange()">${providerOpts}</select>
+
+      <label style="display:block;font-size:0.75rem;color:var(--gold-dim);margin-bottom:4px;letter-spacing:0.06em;">API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="粘贴你的 API Key..." value="${cfg.apiKey.replace(/"/g,'&quot;')}" style="
         width:100%;padding:8px 12px;font-size:0.82rem;font-family:inherit;letter-spacing:0.04em;
         background:rgba(255,255,255,0.04);border:1px solid rgba(200,169,110,0.3);border-radius:2px;
-        color:var(--text);outline:none;box-sizing:border-box;
+        color:var(--text);outline:none;box-sizing:border-box;margin-bottom:12px;
       " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='rgba(200,169,110,0.3)'">
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+
+      <div id="customFields" style="display:${showCustom ? 'block' : 'none'};">
+        <label style="display:block;font-size:0.75rem;color:var(--gold-dim);margin-bottom:4px;letter-spacing:0.06em;">接口地址 (Endpoint)</label>
+        <input type="text" id="endpointInput" placeholder="https://api.example.com/v1/chat/completions" value="${cfg.endpoint}" style="
+          width:100%;padding:8px 12px;font-size:0.82rem;font-family:inherit;letter-spacing:0.04em;
+          background:rgba(255,255,255,0.04);border:1px solid rgba(200,169,110,0.3);border-radius:2px;
+          color:var(--text);outline:none;box-sizing:border-box;margin-bottom:8px;
+        ">
+        <label style="display:block;font-size:0.75rem;color:var(--gold-dim);margin-bottom:4px;letter-spacing:0.06em;">模型名称</label>
+        <input type="text" id="modelInput" placeholder="gpt-4o / claude-3-opus ..." value="${cfg.model}" style="
+          width:100%;padding:8px 12px;font-size:0.82rem;font-family:inherit;letter-spacing:0.04em;
+          background:rgba(255,255,255,0.04);border:1px solid rgba(200,169,110,0.3);border-radius:2px;
+          color:var(--text);outline:none;box-sizing:border-box;margin-bottom:8px;
+        ">
+      </div>
+
+      <div id="providerTips" style="font-size:0.7rem;color:var(--text-dim);opacity:0.7;margin-bottom:12px;line-height:1.6;"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button id="apiKeyClearBtn" style="
           padding:6px 16px;font-size:0.75rem;font-family:inherit;letter-spacing:0.06em;
           border:1px solid rgba(200,138,126,0.3);border-radius:2px;background:transparent;
@@ -207,7 +271,7 @@ function showApiKeyModal() {
         ">清除</button>
         <button id="apiKeySaveBtn" class="btn-primary" style="max-width:100px;">保存</button>
       </div>
-      ${apiKey ? '<div style="font-size:0.7rem;color:var(--accent-green);margin-top:8px;text-align:right;">✓ 已配置</div>' : ''}
+      ${cfg.apiKey ? '<div style="font-size:0.7rem;color:var(--accent-green);margin-top:8px;text-align:right;">✓ 已配置 ' + (AI_PROVIDERS[cfg.provider]?.name || '') + '</div>' : ''}
     </div>
   `;
 
@@ -218,23 +282,69 @@ function showApiKeyModal() {
   });
 
   document.getElementById('apiKeySaveBtn').addEventListener('click', () => {
+    const provider = document.getElementById('providerSelect').value;
     const key = document.getElementById('apiKeyInput').value.trim();
+    const provCfg = AI_PROVIDERS[provider];
+
+    localStorage.setItem('cd-ai-provider', provider);
     if (key) {
-      localStorage.setItem('cd-claude-api-key', key);
+      localStorage.setItem('cd-ai-api-key', key);
     } else {
-      localStorage.removeItem('cd-claude-api-key');
+      localStorage.removeItem('cd-ai-api-key');
     }
+    localStorage.removeItem('cd-claude-api-key'); // clean up old key
+
+    if (provCfg && provCfg.name === '自定义接口') {
+      const ep = document.getElementById('endpointInput').value.trim();
+      const mdl = document.getElementById('modelInput').value.trim();
+      if (ep) localStorage.setItem('cd-ai-endpoint', ep);
+      else localStorage.removeItem('cd-ai-endpoint');
+      if (mdl) localStorage.setItem('cd-ai-model', mdl);
+      else localStorage.removeItem('cd-ai-model');
+    } else {
+      localStorage.removeItem('cd-ai-endpoint');
+      localStorage.removeItem('cd-ai-model');
+    }
+
     overlay.remove();
     renderResumeChecker();
   });
 
   document.getElementById('apiKeyClearBtn').addEventListener('click', () => {
+    localStorage.removeItem('cd-ai-provider');
+    localStorage.removeItem('cd-ai-api-key');
+    localStorage.removeItem('cd-ai-model');
+    localStorage.removeItem('cd-ai-endpoint');
     localStorage.removeItem('cd-claude-api-key');
     overlay.remove();
     renderResumeChecker();
   });
 
-  // Focus input
+  // Update tips and custom fields
+  window.onProviderChange = function() {
+    const p = document.getElementById('providerSelect').value;
+    const provCfg = AI_PROVIDERS[p];
+    if (provCfg) {
+      const tips = document.getElementById('providerTips');
+      const getKeyUrl = {
+        deepseek: 'platform.deepseek.com/api_keys',
+        qwen: 'dashscope.console.aliyun.com/apiKey',
+        moonshot: 'platform.moonshot.cn/console/api-keys',
+        glm: 'open.bigmodel.cn/usercenter/apikeys',
+        doubao: 'console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
+        anthropic: 'console.anthropic.com/settings/keys',
+        custom: ''
+      };
+      const url = getKeyUrl[p];
+      tips.innerHTML = url
+        ? `获取 Key：<a href="https://${url}" target="_blank" style="color:var(--accent-blue);">${url}</a>`
+        : '填入任意兼容 OpenAI Chat Completions 格式的接口信息';
+      document.getElementById('customFields').style.display = provCfg.name === '自定义接口' ? 'block' : 'none';
+      document.getElementById('apiKeyInput').placeholder = p === 'anthropic' ? 'sk-ant-api03-...' : 'sk-...';
+    }
+  };
+  window.onProviderChange();
+
   setTimeout(() => document.getElementById('apiKeyInput').focus(), 100);
 }
 
@@ -339,25 +449,8 @@ function fileToBase64(file) {
   });
 }
 
-async function analyzeResume(content, fileType, fileName) {
-  const status = document.getElementById('aiStatus');
-  const apiKey = localStorage.getItem('cd-claude-api-key');
-
-  if (!apiKey) {
-    showApiKeyModal();
-    status.innerHTML = '<div style="color:var(--accent-red);font-size:0.8rem;padding:8px 0;">请先设置 API Key 后再分析</div>';
-    return;
-  }
-
-  status.innerHTML = `
-    <div class="ai-loading">
-      <div class="ai-spinner"></div>
-      <div style="font-size:0.8rem;color:var(--text-dim);">AI 正在深度分析你的简历...</div>
-      <div style="font-size:0.7rem;color:var(--text-dim);opacity:0.6;">这可能需要 15-30 秒</div>
-    </div>
-  `;
-
-  const systemPrompt = `你是一位资深HR和简历优化专家，拥有10年以上招聘经验。请对简历进行深度专业分析。
+function getSystemPrompt() {
+  return `你是一位资深HR和简历优化专家，拥有10年以上招聘经验。请对简历进行深度专业分析。
 
 请严格按以下JSON格式回复（不要包含任何其他文字，只输出JSON）：
 {
@@ -385,59 +478,41 @@ async function analyzeResume(content, fileType, fileName) {
 - 40以下：需要从结构上重新组织
 
 请用中文回复，评价要具体、可操作。`;
+}
+
+async function analyzeResume(content, fileType, fileName) {
+  const status = document.getElementById('aiStatus');
+  const cfg = getAiConfig();
+
+  if (!cfg.apiKey || !cfg.provider) {
+    showApiKeyModal();
+    status.innerHTML = '<div style="color:var(--accent-red);font-size:0.8rem;padding:8px 0;">请先选择模型并设置 API Key 后再分析</div>';
+    return;
+  }
+
+  const provCfg = AI_PROVIDERS[cfg.provider];
+  if (!provCfg) {
+    showApiKeyModal();
+    return;
+  }
+
+  const providerName = provCfg.name;
+  status.innerHTML = `
+    <div class="ai-loading">
+      <div class="ai-spinner"></div>
+      <div style="font-size:0.8rem;color:var(--text-dim);">${providerName} 正在深度分析你的简历...</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);opacity:0.6;">这可能需要 15-30 秒</div>
+    </div>
+  `;
 
   try {
-    const messages = [{ role: 'user', content: [] }];
+    let replyText;
 
-    if (fileType === 'image') {
-      const mimeType = content.match(/^data:(image\/\w+);/)?.[1] || 'image/jpeg';
-      messages[0].content.push({
-        type: 'image',
-        source: { type: 'base64', media_type: mimeType, data: content.split(',')[1] }
-      });
-      messages[0].content.push({
-        type: 'text',
-        text: '请分析这份简历的图片，给出详细专业评价和改进建议。请按指定的JSON格式回复。'
-      });
+    if (provCfg.format === 'anthropic') {
+      replyText = await analyzeWithAnthropic(cfg, provCfg, content, fileType, fileName);
     } else {
-      messages[0].content.push({
-        type: 'text',
-        text: `请分析以下简历内容（文件名：${fileName}）：\n\n${content.substring(0, 18000)}`
-      });
+      replyText = await analyzeWithOpenAI(cfg, provCfg, content, fileType, fileName);
     }
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: messages
-      })
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      if (response.status === 401) {
-        localStorage.removeItem('cd-claude-api-key');
-        throw new Error('API Key 无效，请重新设置');
-      } else if (response.status === 429) {
-        throw new Error('请求太频繁，请稍后重试');
-      } else if (response.status === 403) {
-        throw new Error('API Key 没有权限，请检查账户余额和权限');
-      } else {
-        throw new Error(errData.error?.message || `请求失败 (${response.status})`);
-      }
-    }
-
-    const data = await response.json();
-    const replyText = data.content[0].text;
 
     let result;
     const jsonMatch = replyText.match(/\{[\s\S]*\}/);
@@ -465,6 +540,111 @@ async function analyzeResume(content, fileType, fileName) {
       </div>
     `;
   }
+}
+
+async function analyzeWithAnthropic(cfg, provCfg, content, fileType, fileName) {
+  const systemPrompt = getSystemPrompt();
+  const model = cfg.model || provCfg.model;
+  const messages = [{ role: 'user', content: [] }];
+
+  if (fileType === 'image') {
+    const mimeType = content.match(/^data:(image\/\w+);/)?.[1] || 'image/jpeg';
+    messages[0].content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: mimeType, data: content.split(',')[1] }
+    });
+    messages[0].content.push({
+      type: 'text',
+      text: '请分析这份简历的图片，给出详细专业评价和改进建议。请按指定的JSON格式回复。'
+    });
+  } else {
+    messages[0].content.push({
+      type: 'text',
+      text: `请分析以下简历内容（文件名：${fileName}）：\n\n${content.substring(0, 18000)}`
+    });
+  }
+
+  const resp = await fetch(provCfg.endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': cfg.apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: messages
+    })
+  });
+
+  if (!resp.ok) {
+    const errData = await resp.json().catch(() => ({}));
+    if (resp.status === 401) {
+      localStorage.removeItem('cd-ai-api-key');
+      throw new Error('API Key 无效，请重新设置');
+    } else if (resp.status === 429) throw new Error('请求太频繁，请稍后重试');
+    else if (resp.status === 403) throw new Error('API Key 没有权限，请检查账户余额');
+    else throw new Error(errData.error?.message || `请求失败 (${resp.status})`);
+  }
+
+  const data = await resp.json();
+  return data.content[0].text;
+}
+
+async function analyzeWithOpenAI(cfg, provCfg, content, fileType, fileName) {
+  const systemPrompt = getSystemPrompt();
+  const model = cfg.model || provCfg.model;
+  const endpoint = cfg.endpoint || provCfg.endpoint;
+  const userContent = [];
+
+  if (fileType === 'image') {
+    userContent.push({
+      type: 'image_url',
+      image_url: { url: content }
+    });
+    userContent.push({
+      type: 'text',
+      text: '请分析这份简历的图片，给出详细专业评价和改进建议。请按指定的JSON格式回复。'
+    });
+  } else {
+    userContent.push({
+      type: 'text',
+      text: `请分析以下简历内容（文件名：${fileName}）：\n\n${content.substring(0, 18000)}`
+    });
+  }
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userContent }
+  ];
+
+  const resp = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${cfg.apiKey}`
+    },
+    body: JSON.stringify({
+      model: model,
+      max_tokens: 4096,
+      messages: messages
+    })
+  });
+
+  if (!resp.ok) {
+    const errData = await resp.json().catch(() => ({}));
+    const errMsg = errData.error?.message || errData.message || errData.msg || errData.error_msg || `请求失败 (${resp.status})`;
+    if (resp.status === 401 || resp.status === 403) {
+      throw new Error('API Key 无效或没有权限，请检查');
+    } else if (resp.status === 429) throw new Error('请求太频繁，请稍后重试');
+    else throw new Error(errMsg);
+  }
+
+  const data = await resp.json();
+  return data.choices[0].message.content;
 }
 
 function renderAiResult(result) {

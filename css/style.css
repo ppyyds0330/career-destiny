@@ -1514,6 +1514,29 @@ body {
   margin-bottom: 16px;
 }
 
+.api-modal select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c8a96e'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.api-modal select option {
+  background: #1a1a2e;
+  color: #b8b0a0;
+}
+
+.api-modal label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--gold-dim);
+  margin-bottom: 4px;
+  letter-spacing: 0.06em;
+}
+
 /* AI result card */
 .ai-result {
   border: 1px solid rgba(200,169,110,0.2);
