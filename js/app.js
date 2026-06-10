@@ -1085,6 +1085,9 @@ function renderZone3() {
         </div>
       </div>
 
+      <!-- Companion Pet -->
+      <div class="companion-wrap" id="companionWrap"></div>
+
       <div class="btn-row" style="margin-top:20px;">
         <button class="btn-secondary" onclick="Z3_resetProgress()">重置进度</button>
       </div>
@@ -1169,6 +1172,9 @@ function renderZone3() {
   }
   nextDiv.innerHTML = suggestions.map(s => `<div>— ${s}</div>`).join('');
 
+  // Render companion pet
+  renderCompanionPet(probability, job);
+
   // Animate gauge
   setTimeout(() => {
     const gaugeFill = document.getElementById('gaugeFill');
@@ -1185,6 +1191,121 @@ function Z3_resetProgress() {
     STATE.milestones = {};
     saveState();
     renderZone3();
+  }
+}
+
+// ── Companion Pet ────────────────────────────
+function renderCompanionPet(probability, job) {
+  const wrap = document.getElementById('companionWrap');
+  if (!wrap) return;
+
+  const skillProgress = STATE.skillProgress || {};
+  const milestones = STATE.milestones || {};
+
+  // Determine mood
+  let mood, moodEmoji, greeting;
+  if (probability >= 80) {
+    mood = 'proud'; moodEmoji = '✨'; greeting = '你太厉害了！';
+  } else if (probability >= 55) {
+    mood = 'happy'; moodEmoji = '🌟'; greeting = '进展不错嘛！';
+  } else if (probability >= 25) {
+    mood = 'idle'; moodEmoji = '💪'; greeting = '一步一步来～';
+  } else {
+    mood = 'worried'; moodEmoji = '🌱'; greeting = '别灰心！';
+  }
+
+  // Find weakest required skill
+  let weakestSkill = null, weakestPct = 100;
+  job.skills.forEach(sk => {
+    const pct = skillProgress[sk.name] || 0;
+    if (pct < weakestPct) { weakestPct = pct; weakestSkill = sk; }
+  });
+
+  // Find undone milestones
+  const milestoneKeys = ['certificate', 'internship', 'project', 'competition'];
+  const undoneMs = [];
+  milestoneKeys.forEach(k => {
+    if (!milestones[`${job.id}_${k}`]) {
+      const labels = { certificate: '考取相关证书', internship: '完成一段实习', project: '做完整项目', competition: '参加比赛获奖' };
+      undoneMs.push(labels[k]);
+    }
+  });
+
+  // Build step hint
+  let stepHint = '';
+  if (weakestSkill && weakestPct < 40) {
+    stepHint = `📌 下一步：专注攻克「${weakestSkill.name}」（${weakestSkill.type === 'required' ? '必修' : '推荐'}），这是当前最大的短板。`;
+  } else if (undoneMs.length > 0) {
+    stepHint = `📌 下一步：${undoneMs[0]}，这会让你的简历更有竞争力哦！`;
+  } else if (weakestSkill && weakestPct < 70) {
+    stepHint = `📌 下一步：把「${weakestSkill.name}」提升到70%以上，录取概率会大幅增加。`;
+  } else if (probability >= 70) {
+    stepHint = '📌 下一步：开始关注目标公司的招聘动态和内推渠道，准备投递！';
+  } else {
+    stepHint = '📌 下一步：先从必修技能开始，每周提升10%，一个月就是40%！';
+  }
+
+  // Random encouraging quotes
+  const quotes = [
+    '每一个大神都是从零开始的。',
+    '今天比昨天进步1%，一年后就是37倍。',
+    '找工作的本质不是"被挑选"，而是"找到对的战场"。',
+    '你已经比80%的人更主动了——他们还没开始呢。',
+    '技能可以学，经验可以攒，但方向感是选择出来的。',
+    '别和任何人比，你只需要比昨天好一点点。',
+    '求职季的每一分准备，都会在未来某天兑现。',
+  ];
+  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
+
+  wrap.innerHTML = `
+    <div class="companion-pet" onclick="handlePetClick(event)" title="点我加油！">
+      <div class="pet-body ${mood}">
+        <div class="pet-eyes">
+          <div class="pet-eye"></div>
+          <div class="pet-eye"></div>
+        </div>
+        <div class="pet-mouth"></div>
+        <div class="pet-sparkle"></div>
+        <div class="pet-sparkle"></div>
+        <div class="pet-sparkle"></div>
+      </div>
+    </div>
+    <div class="pet-speech">
+      ${moodEmoji} <strong>${greeting}</strong> ${randomQuote}
+      <span class="step-hint">${stepHint}</span>
+    </div>
+  `;
+}
+
+function handlePetClick(event) {
+  const pet = event.currentTarget.querySelector('.pet-body');
+  // Ripple effect
+  const ripple = document.createElement('div');
+  ripple.className = 'pet-ripple';
+  pet.appendChild(ripple);
+  setTimeout(() => ripple.remove(), 600);
+
+  // Bounce animation
+  pet.style.animation = 'none';
+  void pet.offsetWidth;
+  pet.style.animation = 'petBounce 0.5s ease-in-out 3';
+
+  // Random cheers on click
+  const cheers = [
+    '加油加油！💪', '你可以的！✨', '冲冲冲！🚀', '相信自己！🌟',
+    '就差一点点！🎯', '你是最棒的！💎', '继续前进！🔥', '就在眼前！👀',
+    '今天也很努力呢！☕', '命运在你手中！📖',
+  ];
+  const speech = document.querySelector('.pet-speech');
+  if (speech) {
+    const cheer = cheers[Math.floor(Math.random() * cheers.length)];
+    const origText = speech.querySelector('strong')?.textContent || '';
+    speech.querySelector('strong').textContent = cheer;
+    speech.querySelector('strong').style.color = 'var(--gold-light)';
+    setTimeout(() => {
+      speech.querySelector('strong').textContent = origText;
+      speech.querySelector('strong').style.color = '';
+    }, 1500);
   }
 }
 
