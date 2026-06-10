@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 2.5cm 2cm; }
+  body { font-family: "SimSun", "Noto Sans SC", serif; font-size: 12pt; line-height: 2; color: #222; }
+  h1 { text-align: center; font-size: 18pt; border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 24px; }
+  h2 { font-size: 14pt; margin-top: 28px; border-left: 4px solid #333; padding-left: 10px; }
+  h3 { font-size: 12.5pt; margin-top: 18px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 10.5pt; }
+  th, td { border: 1px solid #666; padding: 6px 10px; text-align: left; }
+  th { background: #f0f0f0; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 2px 0; }
+  .meta { text-align: center; color: #666; font-size: 10pt; margin-bottom: 20px; }
+  code { background: #f5f5f5; padding: 1px 4px; border-radius: 2px; font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<h1>求职命运之书 · Career Destiny<br>方案说明文档</h1>
+<p class="meta">版本 v3.0 | 2026年6月10日 | 独立开发</p>
+
+<h2>一、解决什么问题</h2>
+<p>当前高校毕业生面临<b>四大核心痛点</b>：</p>
+<ol>
+  <li><b>职业方向迷茫</b>——学生不了解自身性格与岗位的匹配度，仅凭薪资或专业名盲目投递。特别是冷门专业、交叉学科的学生，学校和招聘平台都无法提供有效的职业方向参考。</li>
+  <li><b>缺乏系统成长路径</b>——即使确定了目标岗位，也不知大学四年如何分阶段准备。大一该做什么？大二该学什么技能？大三找什么实习？信息零散且缺乏针对性。</li>
+  <li><b>面试准备低效</b>——简历无人把关、面试题库零散、缺乏模拟练习环境。市面上的面试辅导动辄几千元，学生负担不起。</li>
+  <li><b>行业信息不对称</b>——学生不了解各行业的真实情况（薪资、工作强度、发展前景），容易做出不适合自己的选择。</li>
+</ol>
+<p>市面上虽有零散工具（MBTI测试、招聘网站、简历模板），但<b>无一体的、面向中国大学生的、免费的职业规划全链路平台</b>。本项目旨在填补这一空白。</p>
+
+<h2>二、目标市场</h2>
+<table>
+  <tr><th>维度</th><th>分析</th></tr>
+  <tr><td>核心用户</td><td>中国在校大学生及应届毕业生（本科+研究生），约 4,000 万人/年</td></tr>
+  <tr><td>核心场景</td><td>大二大三职业方向探索期、大四秋招/春招冲刺期、研究生转行规划期</td></tr>
+  <tr><td>竞品格局</td><td>① MBTI 测试类（16Personalities等）：仅做性格分析，无职业匹配；② 招聘平台（BOSS直聘/牛客）：偏向岗位搜索，无测评和培养规划；③ 付费求职辅导（爱思益/小灶）：价格高（数千元），覆盖面窄</td></tr>
+  <tr><td>差异化优势</td><td>免费、一体化（测评→推荐→规划→面试）、AI 增强、面向中国学生定制</td></tr>
+  <tr><td>分发渠道</td><td>GitHub Pages 免费部署、社交媒体分享、校园推广、SEO</td></tr>
+</table>
+
+<h2>三、核心功能与技术实现</h2>
+
+<h3>3.1 整体架构</h3>
+<table>
+  <tr><th>层级</th><th>技术选型</th><th>说明</th></tr>
+  <tr><td>前端框架</td><td>无框架，原生 HTML/CSS/JS</td><td>零依赖、零构建、加载极快。总计约 7,700 行代码</td></tr>
+  <tr><td>数据存储</td><td>localStorage</td><td>测评结果、技能进度、AI配置、模拟面试记录均存本地，无后端数据库</td></tr>
+  <tr><td>部署方案</td><td>GitHub Pages</td><td>SSH 推送（HTTPS 在国内不稳定），永久免费，自动 HTTPS</td></tr>
+  <tr><td>视觉风格</td><td>暗金星空主题</td><td>Canvas 动态星空背景 + CSS 变量统一配色 + 响应式布局</td></tr>
+  <tr><td>PDF 解析</td><td>PDF.js v3.11 CDN</td><td>按需动态加载，客户端提取文字，不上传原始文件到任何服务器</td></tr>
+</table>
+
+<h3>3.2 四专区功能矩阵</h3>
+<table>
+  <tr><th>专区</th><th>核心功能</th><th>技术要点</th></tr>
+  <tr>
+    <td><b>Zone 1<br>职业罗盘</b></td>
+    <td>
+      ① 16题四维度性格测评（IE/TF/JP/SN）<br>
+      ② 个人档案采集（年级/专业/技能/意向行业）<br>
+      ③ 意愿偏好采集（行业/优先级排序/薪资期望）<br>
+      ④ 智能匹配算法 + AI 个性化解读<br>
+      ⑤ AI 兜底专业匹配（规则未覆盖时）
+    </td>
+    <td>
+      加权评分算法（性格40分 + 行业意愿30分 + 背景匹配20分 + 薪资偏好10分）<br>
+      91个专业 × 86条规则的关键词匹配引擎<br>
+      规则未命中时自动调用 AI 推荐岗位<br>
+      AI 生成 150 字个性化职业解读
+    </td>
+  </tr>
+  <tr>
+    <td><b>Zone 2<br>成长地图</b></td>
+    <td>
+      ① 锁定目标岗位后的完整 JD 展示<br>
+      ② 大学四年分阶段培养路线图（大一~大四）<br>
+      ③ 8项技能树（必修/推荐/进阶）<br>
+      ④ 14个行业全景分析（趋势/优缺点/热门城市/热门技能）
+    </td>
+    <td>
+      90 个岗位各含 4 年路线 × 4 个阶段 × 3-5 条行动项<br>
+      行业概览包含趋势、优劣势、Top 城市、热门技能<br>
+      一键"锁定岗位"后可在 Zone 2/3 中持续使用
+    </td>
+  </tr>
+  <tr>
+    <td><b>Zone 3<br>成长仪表盘</b></td>
+    <td>
+      ① SVG 半圆录取概率仪表盘<br>
+      ② 可点击的技能进度条（跟踪学习进度）<br>
+      ③ 里程碑清单 + 成就系统<br>
+      ④ 陪伴宠物"命运精灵"（4种心情状态）
+    </td>
+    <td>
+      Canvas 绘制动态仪表盘指针动画<br>
+      进度数据持久化 localStorage<br>
+      宠物状态根据进度数据和时段变化（清晨/白天/夜晚）
+    </td>
+  </tr>
+  <tr>
+    <td><b>Zone 4<br>面试军械库</b></td>
+    <td>
+      ① AI 简历智能诊断（上传 PDF/图片）<br>
+      ② 27道分类面试题库（行为/技术/HR/压力/群面）<br>
+      ③ 计时模拟面试 + 自评打分<br>
+      ④ 5个群面案例分析 + 角色策略<br>
+      ⑤ 20条简历检查清单 + 5套行业简历模板
+    </td>
+    <td>
+      支持 6 个 AI 模型 + 自定义 OpenAI 兼容接口<br>
+      Anthropic 原生格式 + OpenAI 兼容双格式请求<br>
+      API Key 仅存浏览器，直连模型厂商，不经过中转
+    </td>
+  </tr>
+</table>
+
+<h3>3.3 数据规模</h3>
+<table>
+  <tr><th>数据结构</th><th>数量</th><th>说明</th></tr>
+  <tr><td>测评题目</td><td>16 题 × 4 选项</td><td>每题含叙事引导文字，覆盖 IE/TF/JP/SN 四个性格维度</td></tr>
+  <tr><td>岗位数据库</td><td>90 个岗位</td><td>覆盖 22 个行业，每个岗位含 JD/性格匹配/薪资/四年路线/8项技能/日常/企业推荐</td></tr>
+  <tr><td>专业列表</td><td>91 个专业</td><td>覆盖计算机/商科/文科/理科/工科/设计/医学/公安 8 大类</td></tr>
+  <tr><td>专业匹配规则</td><td>86 条</td><td>关键词子串匹配 + AI 兜底，确保冷门专业也能获得推荐</td></tr>
+  <tr><td>行业概览</td><td>14 个行业</td><td>每个行业含趋势/优缺点/Top城市/热门技能</td></tr>
+  <tr><td>面试题库</td><td>27 题</td><td>行为面试10 + 技术面试5 + HR面试5 + 压力面试3 + 群面4</td></tr>
+  <tr><td>简历模板</td><td>5 套</td><td>按行业定制（互联网/金融/咨询/消费品/政府）</td></tr>
+</table>
+
+<h2>四、AI 工具使用</h2>
+
+<h3>4.1 AI 应用的三个场景</h3>
+<table>
+  <tr><th>场景</th><th>触发时机</th><th>AI 任务</th><th>输入</th><th>输出</th></tr>
+  <tr>
+    <td><b>简历智能诊断</b></td>
+    <td>Zone 4 用户上传简历 PDF/图片</td>
+    <td>深度分析简历内容，按 6 维度打分，指出亮点和待改进项，给出关键词优化建议和行动计划</td>
+    <td>PDF 提取文字 / 图片 base64</td>
+    <td>结构化 JSON（总评+逐项评分+亮点+待改进+行动建议）</td>
+  </tr>
+  <tr>
+    <td><b>兜底专业匹配</b></td>
+    <td>Zone 1 用户输入专业后，规则引擎未匹配到任何岗位</td>
+    <td>根据专业名称，从 90 个岗位中选出最对口的 5-8 个</td>
+    <td>专业名称字符串 + 全部岗位列表</td>
+    <td>JSON 数组：岗位 ID 列表</td>
+  </tr>
+  <tr>
+    <td><b>个性化职业解读</b></td>
+    <td>Zone 1 推荐结果生成后（后台异步）</td>
+    <td>结合用户 MBTI 性格、专业、技能、意愿偏好、测评回答特征和 Top 3 推荐岗位，生成约 150 字温暖专业的职业分析</td>
+    <td>用户完整画像 + Top 3 推荐岗位详情</td>
+    <td>自然语言解读文本</td>
+  </tr>
+</table>
+
+<h3>4.2 支持的 AI 模型</h3>
+<table>
+  <tr><th>模型</th><th>调用格式</th><th>适用场景</th><th>优势</th></tr>
+  <tr><td>DeepSeek (deepseek-chat)</td><td>OpenAI 兼容</td><td>专业匹配、职业解读</td><td>性价比极高，国内直达，中文流畅</td></tr>
+  <tr><td>阿里通义千问 (qwen-plus)</td><td>OpenAI 兼容</td><td>简历分析、职业解读</td><td>中文理解力强，阿里云生态</td></tr>
+  <tr><td>月之暗面 Kimi (moonshot-v1-8k)</td><td>OpenAI 兼容</td><td>简历分析（长文本）</td><td>长文本处理出色，适合详细简历</td></tr>
+  <tr><td>智谱 ChatGLM (glm-4)</td><td>OpenAI 兼容</td><td>专业匹配</td><td>清华系，学术背景理解好</td></tr>
+  <tr><td>字节豆包 (doubao-pro-32k)</td><td>OpenAI 兼容</td><td>简历分析、职业解读</td><td>字节跳动旗下，中文优化</td></tr>
+  <tr><td>Anthropic Claude (claude-sonnet-4-6)</td><td>Anthropic 原生</td><td>简历图片识别、深度分析</td><td>最强分析能力，Vision 图片识别优秀</td></tr>
+  <tr><td>自定义接口</td><td>OpenAI 兼容</td><td>全部场景</td><td>填入任意兼容接口，无缝扩展</td></tr>
+</table>
+
+<h3>4.3 Prompt 设计策略</h3>
+<ol>
+  <li><b>角色设定</b>：简历分析 = "资深 HR 专家"，专业匹配 = "大学生职业规划专家"，职业解读 = "资深职业规划顾问"</li>
+  <li><b>结构化输出</b>：简历分析和专业匹配要求 JSON 格式回复，便于前端解析渲染；职业解读要求纯文本 150 字，直接展示。</li>
+  <li><b>中文优化</b>：所有 Prompt 均为中文，System Prompt 设定"用中文回复"，适配国内模型。</li>
+  <li><b>容错设计</b>：AI 返回格式异常时有正则兜底提取（JSON 解析失败则用正则匹配关键字段），AI 调用失败静默降级不影响核心功能。</li>
+  <li><b>安全性</b>：API Key 仅存浏览器 localStorage，每次请求直连模型厂商官方 API，<b>不经过任何中转服务器</b>。</li>
+</ol>
+
+<h2>五、关键配置</h2>
+<table>
+  <tr><th>配置项</th><th>方案</th><th>说明</th></tr>
+  <tr><td>前端框架</td><td>无框架，原生 HTML/CSS/JS</td><td>零依赖、零构建。3 个 JS 文件 + 1 个 CSS + 1 个 HTML，总计约 7,700 行</td></tr>
+  <tr><td>数据存储</td><td>localStorage</td><td>STATE 对象完整序列化，键名：<code>cd-state</code>、<code>cd-ai-provider</code>、<code>cd-ai-api-key</code> 等</td></tr>
+  <tr><td>部署方案</td><td>GitHub Pages (SSH)</td><td>仓库 <code>ppyyds0330/career-destiny</code>，main 分支自动部署</td></tr>
+  <tr><td>缓存策略</td><td>JS 文件版本号参数 <code>?v=3</code></td><td>每次重大更新递增版本号，强制浏览器重新加载，避免旧缓存导致功能异常</td></tr>
+  <tr><td>AI 接口</td><td>Anthropic 原生 + OpenAI 兼容双格式</td><td><code>callAI()</code> 统一入口，内部根据 provider.format 分发两套请求逻辑</td></tr>
+  <tr><td>PDF 解析</td><td>PDF.js v3.11 CDN</td><td>按需动态加载 <code>&lt;script&gt;</code> 标签，不增加初始加载体积</td></tr>
+  <tr><td>视觉风格</td><td>暗金星空主题</td><td>CSS 变量 15 个（<code>--bg</code>、<code>--gold</code>、<code>--text</code> 等），Canvas 星空粒子动画</td></tr>
+  <tr><td>推荐算法加权</td><td>性格40% + 行业意愿30% + 背景匹配20% + 薪资偏好10%</td><td>百分制打分，Top 6 分"心之所向"和"隐藏选项"两组展示</td></tr>
+</table>
+
+<h2>六、迭代记录</h2>
+<table>
+  <tr><th>版本</th><th>提交</th><th>关键变更</th></tr>
+  <tr><td>v1.0</td><td><code>700ecfd</code></td><td>首版发布：Zone 1-3 完整实现，35 个岗位数据库，8 题测评，GitHub Pages 部署</td></tr>
+  <tr><td>v1.1</td><td><code>fdc68a0</code></td><td>新增 Zone 3 陪伴宠物"命运精灵"（4种心情），13 个行业全景数据</td></tr>
+  <tr><td>v1.2</td><td><code>d8345f0</code></td><td>新增 Zone 4「面试军械库」：简历检查清单、面试题库、模拟面试计时器、群面攻略</td></tr>
+  <tr><td>v1.3</td><td><code>1477ad0</code></td><td>AI 简历智能分析：PDF/图片上传，Claude API 调用，6维度结构化分析报告</td></tr>
+  <tr><td>v1.4</td><td><code>884cefb</code></td><td>多模型 AI 支持：DeepSeek/通义千问/Kimi/ChatGLM/豆包/Claude + 自定义接口，Anthropic + OpenAI 双格式</td></tr>
+  <tr><td>v2.0</td><td><code>7d10d28</code></td><td><b>岗位数据库大扩充</b>：35→90 个岗位，覆盖 22 个行业；测评 8→16 题；专业列表 0→52 个；专业匹配规则 0→64 条；缓存版本号机制</td></tr>
+  <tr><td>v2.1</td><td><code>6e337f7</code></td><td>版本标记 + 缓存刷新参数，确保新版本部署后用户看到最新代码</td></tr>
+  <tr><td>v3.0</td><td><code>e39f8d7</code></td><td><b>AI 辅助职业匹配</b>：① 修复 INDUSTRY_TAGS 与数据库行业名不匹配的关键 Bug（14 个标签全部对齐）；② AI 兜底专业匹配（规则未覆盖时自动调用 AI）；③ AI 个性化职业解读（推荐结果页 150 字分析）；④ 专业列表 52→91，匹配规则 64→86；⑤ AI 基础设施移至 data.js 统一管理</td></tr>
+  <tr><td>v3.0.1</td><td><code>e691154</code></td><td>修复 data.js/app.js 缓存问题，所有 JS 文件统一版本号 v=3</td></tr>
+</table>
+
+<h2>七、效果评估</h2>
+
+<h3>7.1 功能完整性</h3>
+<p>覆盖从<b>「自我认知 → 职业推荐 → 四年规划 → 进度跟踪 → 面试实战」</b>的完整求职链路。四个专区互为补充，用户可在一次会话中完成全部流程，无需切换多个平台。</p>
+
+<h3>7.2 推荐准确性</h3>
+<ul>
+  <li><b>性格匹配</b>：16 题四维度测评，每维度分数范围约 -16 ~ +16（原始版本 8 题约 -8 ~ +8），区分度提升一倍。</li>
+  <li><b>专业覆盖</b>：91 个专业 + 86 条规则 + AI 兜底，确保热门和冷门专业都能获得推荐。经测试，"电气工程及其自动化""精算学""中医学"等均可匹配到对口岗位。</li>
+  <li><b>行业匹配</b>：修复了行业标签与数据库不匹配的 Bug（此前仅 3/14 标签有效），行业意愿筛选现在 100% 生效。</li>
+</ul>
+
+<h3>7.3 可达性</h3>
+<ul>
+  <li>GitHub Pages 永久免费部署，国内可直接访问</li>
+  <li>无需注册登录，零门槛使用</li>
+  <li>手机/PC 响应式适配</li>
+</ul>
+
+<h3>7.4 AI 增强效果</h3>
+<ul>
+  <li><b>简历分析</b>：通过结构化 HR 专家 Prompt，AI 可产出包含 6 维度逐项评分、亮点/待改进、行动计划的专业报告。支持手机拍照上传。</li>
+  <li><b>专业兜底</b>：规则覆盖 91 个专业，AI 兜底确保 100% 的专业都能获得推荐，大幅降低"输入专业后无结果"的概率。</li>
+  <li><b>个性化解讀</b>：AI 结合完整用户画像生成的解读，比单纯的匹配度数字更有说服力和温度。</li>
+</ul>
+
+<h3>7.5 当前局限与改进方向</h3>
+<ol>
+  <li><b>测评深度</b>：16 题较 8 题已有提升，但与完整 MBTI（93题）相比仍有差距。未来可增加题目或在 AI 解读中补充说明。</li>
+  <li><b>无云端同步</b>：数据仅存 localStorage，更换设备/浏览器会丢失。未来可引入 Firebase 或 Supabase 实现云端存储。</li>
+  <li><b>AI 依赖用户自有 Key</b>：未配置 API Key 则无法使用 AI 功能。未来可考虑提供有限的免费额度。</li>
+  <li><b>岗位数据静态</b>：JOB_DATABASE 为手工编写，未接入实时招聘数据。scraper.py 框架已搭建，可对接 BOSS直聘/牛客 API。</li>
+  <li><b>缺乏社区/分享功能</b>：未来可增加结果分享卡片生成，便于社交媒体传播。</li>
+</ol>
+
+<p style="text-align:center;margin-top:30px;color:#888;">— END —</p>
+
+</body>
+</html>
