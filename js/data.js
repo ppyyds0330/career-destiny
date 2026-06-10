@@ -3,6 +3,84 @@
    MBTI quiz, job positions, majors, skills, roadmaps
    ============================================================ */
 
+// ── AI Provider Configuration ─────────────────
+const AI_PROVIDERS = {
+  deepseek:   { name:'DeepSeek',       endpoint:'https://api.deepseek.com/v1/chat/completions',                    model:'deepseek-chat',     format:'openai', desc:'性价比极高，国内直达' },
+  qwen:       { name:'阿里通义千问',     endpoint:'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model:'qwen-plus',         format:'openai', desc:'阿里云出品，中文理解强' },
+  moonshot:   { name:'月之暗面 Kimi',    endpoint:'https://api.moonshot.cn/v1/chat/completions',                    model:'moonshot-v1-8k',    format:'openai', desc:'长文本处理出色' },
+  glm:        { name:'智谱 ChatGLM',    endpoint:'https://open.bigmodel.cn/api/paas/v4/chat/completions',           model:'glm-4',             format:'openai', desc:'清华系，学术背景扎实' },
+  doubao:     { name:'字节豆包',         endpoint:'https://ark.cn-beijing.volces.com/api/v3/chat/completions',       model:'doubao-pro-32k',    format:'openai', desc:'字节跳动旗下' },
+  anthropic:  { name:'Anthropic Claude',endpoint:'https://api.anthropic.com/v1/messages',                            model:'claude-sonnet-4-6', format:'anthropic', desc:'最强分析能力，需海外访问' },
+  custom:     { name:'自定义接口',        endpoint:'',                                                               model:'',                  format:'openai', desc:'填入任意 OpenAI 兼容接口' }
+};
+
+function getAiConfig() {
+  const oldKey = localStorage.getItem('cd-claude-api-key');
+  if (oldKey && !localStorage.getItem('cd-ai-api-key')) {
+    localStorage.setItem('cd-ai-api-key', oldKey);
+    localStorage.setItem('cd-ai-provider', 'anthropic');
+    localStorage.removeItem('cd-claude-api-key');
+  }
+  const provider = localStorage.getItem('cd-ai-provider') || '';
+  const apiKey = localStorage.getItem('cd-ai-api-key') || '';
+  const model = localStorage.getItem('cd-ai-model') || '';
+  const endpoint = localStorage.getItem('cd-ai-endpoint') || '';
+  return { provider, apiKey, model, endpoint };
+}
+
+// ── Shared AI Call (OpenAI format) ─────────────
+async function callAI(systemPrompt, userPrompt, maxTokens = 2048) {
+  const cfg = getAiConfig();
+  if (!cfg.apiKey || !cfg.provider) return null;
+  const provCfg = AI_PROVIDERS[cfg.provider];
+  if (!provCfg) return null;
+
+  const endpoint = cfg.endpoint || provCfg.endpoint;
+  const model = cfg.model || provCfg.model;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  try {
+    if (provCfg.format === 'anthropic') {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': cfg.apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: model,
+          max_tokens: maxTokens,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }]
+        })
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data.content?.[0]?.text || '';
+    } else {
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${cfg.apiKey}`
+        },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages })
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data.choices?.[0]?.message?.content || '';
+    }
+  } catch (e) {
+    console.warn('AI call failed:', e.message);
+    return null;
+  }
+}
+
 // ── Grade Options ────────────────────────────
 const GRADE_OPTIONS = [
   '大一', '大二', '大三', '大四',
@@ -15,20 +93,31 @@ const MAJOR_LIST = [
   // 计算机/电子
   '计算机科学与技术', '软件工程', '人工智能', '数据科学与大数据技术',
   '电子信息工程', '通信工程', '自动化', '网络空间安全', '物联网工程',
+  '网络与新媒体', '信息安全',
   // 商科/管理
   '工商管理', '市场营销', '会计学', '财务管理', '人力资源管理',
   '国际经济与贸易', '金融学', '经济学', '信息管理与信息系统',
+  '金融工程', '保险学', '精算学', '税收学', '供应链管理', '物流管理',
+  '工程管理', '工程造价', '电子商务',
   // 文科/社科
   '汉语言文学', '新闻传播学', '广告学', '英语', '日语', '法学',
   '社会学', '心理学', '教育学', '行政管理', '公共管理',
+  '汉语国际教育', '广播电视学', '编辑出版学', '学前教育', '特殊教育',
   // 理科/工科
   '数学与应用数学', '统计学', '物理学', '化学',
-  '机械工程', '电气工程', '土木工程', '材料科学', '能源与动力工程',
-  '生物医学工程', '环境工程',
+  '机械工程', '电气工程', '电气工程及其自动化', '土木工程', '材料科学', '能源与动力工程',
+  '生物医学工程', '环境工程', '车辆工程', '测控技术与仪器',
+  '核工程与核技术', '船舶与海洋工程', '建筑学', '城乡规划',
+  '风景园林', '给排水科学与工程',
   // 设计/艺术
   '视觉传达设计', '数字媒体艺术', '工业设计', '动画',
+  '音乐表演', '播音与主持艺术',
   // 医学/生命科学
   '临床医学', '药学', '生物技术', '生物信息学',
+  '医学检验技术', '医学影像技术', '康复治疗学', '中医学', '中药学',
+  '护理学', '预防医学', '口腔医学',
+  // 公安/政法
+  '治安学', '侦查学', '边防管理', '知识产权',
   // 其他
   '其他工科', '其他理科', '其他文科', '其他商科',
 ];
@@ -47,10 +136,10 @@ const SKILL_TAGS = [
 
 // ── Industry Directions ──────────────────────
 const INDUSTRY_TAGS = [
-  '互联网/科技', '金融/投资', '公务员/事业编', '国企/央企',
-  '快消/零售', '咨询/四大', '制造业', '教育/培训',
-  '医疗/医药', '广告/传媒', '房地产/建筑', '新能源/汽车',
-  '游戏/娱乐', '创业/Startup',
+  '互联网/科技', '金融/银行', '政府/公共事业', '制造业/工业',
+  '消费品/零售', '法律/咨询', '教育/培训', '医疗/医药',
+  '媒体/文化', '建筑/房地产', '能源/环保', '艺术/娱乐',
+  '农业/食品', '通信/ICT',
 ];
 
 // ── Priority Options ─────────────────────────
@@ -155,9 +244,97 @@ const QUIZ_QUESTIONS = [
       { text: '身边有一群志同道合的人，我们在一起做着有意义的事', icon: '🌻', effect: { TF: -2, IE: 2, SN: 1 } },
     ],
   },
+  {
+    id: 9,
+    text: '遇到一个突然的变化（比如临时换题），你的第一反应是？',
+    narrative: '离毕业答辩还有三天，导师突然让你换一个研究方向——',
+    choices: [
+      { text: '虽然不爽，但马上开始规划新方案和执行步骤', icon: '⚡', effect: { JP: 2, TF: 1 } },
+      { text: '先静下来想想：这个变化有没有可能带来更好的结果？', icon: '🔮', effect: { SN: 2, JP: -1 } },
+      { text: '找同学和导师再确认一下，听取更多意见再行动', icon: '🗣️', effect: { IE: 2, TF: -1 } },
+      { text: '有点焦虑，担心做不好，需要时间来调整心态', icon: '💭', effect: { TF: -2, IE: -1 } },
+    ],
+  },
+  {
+    id: 10,
+    text: '你需要快速掌握一个新技能，你会怎么做？',
+    narrative: '下个月的项目需要用到一个你完全没接触过的技术栈——',
+    choices: [
+      { text: '找一套系统课程/教材，从头到尾按部就班学', icon: '📖', effect: { JP: 2, SN: -1 } },
+      { text: '快速看几个实战案例，直接上手边做边学', icon: '🛠️', effect: { SN: 2, JP: -1 } },
+      { text: '找一个懂的人带带你，跟着做效率更高', icon: '👥', effect: { IE: 2, TF: -1 } },
+      { text: '先弄清楚底层原理，理解了再学操作', icon: '⚙️', effect: { TF: 2, SN: 1 } },
+    ],
+  },
+  {
+    id: 11,
+    text: '在做一个重要决定时，以下哪个更接近你的决策过程？',
+    narrative: '夜深了，你还在反复权衡那个选择——',
+    choices: [
+      { text: '列出所有选项的利弊，给每个因素打分，选总分最高的', icon: '📊', effect: { TF: 2, JP: 1 } },
+      { text: '相信直觉——什么让你有"对的感觉"就选什么', icon: '✨', effect: { TF: -2, SN: 1 } },
+      { text: '多方咨询：问在职的人、问学长学姐、问家人', icon: '📞', effect: { IE: 1, SN: -1 } },
+      { text: '更关注"如果不做这件事，将来会不会后悔"', icon: '🎯', effect: { SN: 2, TF: -1 } },
+    ],
+  },
+  {
+    id: 12,
+    text: '朋友情绪低落来找你倾诉，你的应对方式是？',
+    narrative: '她坐在你对面，眼眶微红——',
+    choices: [
+      { text: '先认真听，让对方把情绪释放出来', icon: '🫂', effect: { TF: -2, IE: 1 } },
+      { text: '帮她分析问题出在哪里，一起想解决方案', icon: '🔧', effect: { TF: 2, JP: 1 } },
+      { text: '带她去做点开心的事，转移注意力', icon: '🎪', effect: { IE: 2, JP: -1 } },
+      { text: '分享自己类似的经历，让她感觉不是一个人', icon: '💞', effect: { TF: -1, SN: 1, IE: 1 } },
+    ],
+  },
+  {
+    id: 13,
+    text: '如果你要策划一次旅行，以下哪个最接近你的风格？',
+    narrative: '难得的长假，你打开订票软件——',
+    choices: [
+      { text: '提前做好攻略：酒店/交通/景点/餐厅全部预订好，每天有日程表', icon: '🗺️', effect: { JP: 2, SN: -1 } },
+      { text: '定个大概方向和几个必去的地方，其他的到了再说', icon: '🧭', effect: { JP: -1, SN: 1 } },
+      { text: '不做计划，随走随停，偶遇未知才有趣', icon: '🎲', effect: { JP: -2, SN: 2 } },
+      { text: '约上三五好友一起，什么计划不重要，关键是和谁去', icon: '👯', effect: { IE: 2, TF: -1 } },
+    ],
+  },
+  {
+    id: 14,
+    text: '面对一个复杂的、没有标准答案的问题，你的方法是？',
+    narrative: '你盯着屏幕，这个问题比想象中棘手得多——',
+    choices: [
+      { text: '把它分解成几个小问题，逐个击破', icon: '🧩', effect: { TF: 2, JP: 1 } },
+      { text: '退一步看全局，先理解问题的本质和起因', icon: '🔭', effect: { SN: 2, JP: -1 } },
+      { text: '找几个不同背景的人一起头脑风暴', icon: '🧠', effect: { IE: 1, SN: 1 } },
+      { text: '先做一个最小可行方案，跑起来再不断迭代', icon: '🚲', effect: { JP: -2, SN: 2 } },
+    ],
+  },
+  {
+    id: 15,
+    text: '你理想中的工作环境更接近以下哪种？',
+    narrative: '想象你未来每天上班的场景——',
+    choices: [
+      { text: '开放工位、随时交流、团队气氛活跃', icon: '🏢', effect: { IE: 2, JP: -1 } },
+      { text: '安静独立的空间，能深度专注、不被打扰', icon: '📚', effect: { IE: -2, JP: 1 } },
+      { text: '灵活办公，不一定在办公室，自由安排时间和地点', icon: '🏖️', effect: { JP: -2, SN: 2 } },
+      { text: '专业规范的环境，职责清晰、流程明确', icon: '🏛️', effect: { JP: 2, SN: -1, TF: 1 } },
+    ],
+  },
+  {
+    id: 16,
+    text: '如果有人对你的方案提出尖锐的批评，你一般会？',
+    narrative: '评审会上，一位前辈一针见血地指出了你方案的漏洞——',
+    choices: [
+      { text: '先听完，然后逐条回应：哪些认同、哪些需要解释', icon: '🎯', effect: { TF: 2, JP: 1 } },
+      { text: '虽然表面平静，但心里不太舒服，需要时间消化', icon: '🌧️', effect: { TF: -2, IE: -1 } },
+      { text: '觉得这是学习和成长的机会，主动追问细节', icon: '🌱', effect: { SN: 2, IE: 1 } },
+      { text: '把批评当成辩论，和对方深入探讨不同观点', icon: '⚔️', effect: { TF: 1, SN: 1, JP: -1 } },
+    ],
+  },
 ];
 
-// ── Job Positions Database (15 jobs, 6 industries) ────
+// ── Job Positions Database (90 jobs across 22 industries) ────
 
 const JOB_DATABASE = [
   {
@@ -2816,7 +2993,7 @@ const INDUSTRY_OVERVIEWS = {
     topCities: ['北京', '深圳', '杭州', '上海', '广州', '成都'],
     hotSkills: ['AI/大模型', 'Go/Rust', '云原生', '数据工程', 'AIGC应用'],
   },
-  '金融/投资': {
+  '金融/银行': {
     icon: '💰',
     summary: '金融行业是永远的"金饭碗"，但门槛高、竞争激烈。券商、基金、银行、保险四大板块各有千秋。量化/金融科技是近年最热方向。',
     trends: ['量化交易持续扩张', '金融科技(FinTech)重塑传统业务', '注册制改革带来投行机会', 'ESG/绿色金融兴起'],
@@ -2825,43 +3002,43 @@ const INDUSTRY_OVERVIEWS = {
     topCities: ['上海', '北京', '深圳', '香港'],
     hotSkills: ['Python量化', 'CFA/FRM', '财务建模', '风控合规', '区块链'],
   },
-  '公务员/事业编': {
+  '政府/公共事业': {
     icon: '🏛️',
-    summary: '在不确定的时代，"考编"提供了最大的确定性。国考/省考/选调生/事业单位/国企——多条路径，总有一条适合追求稳定的人。',
+    summary: '在不确定的时代，体制内工作提供了最大的确定性。国考/省考/选调生/事业单位/国企——多条路径，总有一条适合追求稳定的人。',
     trends: ['竞争逐年白热化(报录比100:1+)', '基层岗位需求增加', '数字化政府带来技术岗位', '选调生成为名校生热门选择'],
     pros: ['极高的稳定性', '完善的福利和退休保障', '社会地位和资源', '工作生活相对平衡'],
     cons: ['薪资增长有限', '晋升论资排辈', '部分岗位重复枯燥', '体制内规则复杂'],
     topCities: ['北京', '上海', '深圳', '各省会城市'],
     hotSkills: ['行测/申论', '公文写作', '政策分析', '群众工作', '财务/审计'],
   },
-  '国企/央企': {
-    icon: '🏭',
-    summary: '国企/央企介于体制内和市场化之间——既有编制的稳定性，又有一定的市场竞争力。近年来国企改革不断深化，岗位吸引力持续上升。',
-    trends: ['国企数字化转型带来大量技术岗', '混合所有制改革', '央企重组整合', '海外业务扩展(一带一路)'],
-    pros: ['稳定性强于私企', '福利待遇完善', '平台大，资源丰富', '社会地位认可度高'],
-    cons: ['创新空间有限', '决策链条长', '薪资弹性小', '部分企业文化老旧'],
-    topCities: ['北京', '上海', '广州', '深圳', '各省会'],
-    hotSkills: ['项目管理', '财务/审计', '法务/合规', '工程技术', '数字化转型'],
+  '农业/食品': {
+    icon: '🌾',
+    summary: '农业和食品行业是永远的"刚需"赛道——从智慧农业到食品科技，从预制菜到植物基蛋白，传统行业正在被科技重新定义。',
+    trends: ['智慧农业/精准农业', '预制菜/中央厨房爆发', '植物基/替代蛋白', '食品安全与溯源技术'],
+    pros: ['需求稳定，抗周期性强', '政策支持力度大(乡村振兴)', '技术人才缺口大', '产业升级空间广阔'],
+    cons: ['部分岗位薪资偏低', '地理位置偏(农业基地)', '传统观念认知偏差', '行业集中度低'],
+    topCities: ['北京', '上海', '广州', '成都', '武汉'],
+    hotSkills: ['食品科学', '质量检测', '供应链管理', '农业技术', '食品研发'],
   },
-  '快消/零售': {
+  '消费品/零售': {
     icon: '🛍️',
-    summary: '快消行业是营销和管理人才的"黄埔军校"。宝洁、联合利华等巨头的管培生项目培养了无数商业领袖。新消费品牌的崛起带来了更多机会。',
+    summary: '消费品行业是营销和管理人才的"黄埔军校"。宝洁、联合利华等巨头的管培生项目培养了无数商业领袖。新消费品牌的崛起带来了更多机会。',
     trends: ['DTC(直面消费者)模式兴起', '直播电商和社交电商爆发', '国货品牌崛起', '数字化转型(全渠道零售)'],
     pros: ['管培生培养体系成熟', '管理路线晋升清晰', '品牌营销经验值钱', '工作环境好(外企居多)'],
     cons: ['薪资增长较慢', '传统快消增速放缓', '外企在华面临本土竞争', '部分岗位天花板明显'],
     topCities: ['上海', '广州', '北京', '深圳', '杭州'],
     hotSkills: ['品牌营销', '电商运营', '数据分析', '供应链管理', '消费者洞察'],
   },
-  '咨询/四大': {
+  '法律/咨询': {
     icon: '📊',
-    summary: '咨询行业是商业精英的聚集地——麦肯锡、BCG、贝恩(MBB)是金字塔尖端，四大(德勤/普华永道/安永/毕马威)是最大的人才输出地。',
-    trends: ['数字化转型咨询快速增长', 'ESG/可持续发展咨询兴起', 'AI咨询成为新赛道', '四大咨询业务挑战传统咨询'],
+    summary: '法律和咨询行业是高薪精英的聚集地——律所(金杜/中伦/君合)和咨询公司(麦肯锡/BCG/贝恩)是顶尖学生的热门选择。合规/数据隐私律师需求激增。',
+    trends: ['数字化转型咨询快速增长', 'ESG/可持续发展咨询兴起', '数据合规/隐私保护律师紧缺', 'AI法律科技(AI+法律)'],
     pros: ['精英化培养体系', '薪资成长快(3年翻倍)', 'exit opportunity极好', '接触各行业top客户'],
     cons: ['工作强度极大(忙季007)', '入职门槛极高(名校+GPA)', '出差频繁(一年200+天)', '竞争压力巨大(up or out)'],
     topCities: ['上海', '北京', '深圳', '香港'],
-    hotSkills: ['Case分析', '财务建模', 'PPT/Excel', '英语流利', '结构化思维'],
+    hotSkills: ['法律研究', '合同审查', '案例分析', '英语流利', '结构化思维'],
   },
-  '制造业': {
+  '制造业/工业': {
     icon: '⚙️',
     summary: '中国是全球制造业第一大国。"中国制造2025"和产业升级推动制造业从劳动密集型向技术密集型转型，智能制造/工业4.0是核心方向。',
     trends: ['智能制造/工业4.0', '新能源汽车/动力电池爆发', '半导体/芯片国产化', '工业互联网平台'],
@@ -2888,7 +3065,7 @@ const INDUSTRY_OVERVIEWS = {
     topCities: ['上海', '北京', '苏州', '深圳', '武汉', '成都'],
     hotSkills: ['临床试验', 'GMP/GSP', '注册申报', '生物信息学', '医疗器械设计'],
   },
-  '广告/传媒': {
+  '媒体/文化': {
     icon: '📺',
     summary: '内容行业正在经历从传统媒体到新媒体的彻底转型。短视频、直播、播客、AI创作——内容的形式在变，但对好内容的需求从未改变。',
     trends: ['短视频/直播成为主流', 'AI辅助创作(AIGC)', '播客/音频内容兴起', '品牌内容化(内容即广告)'],
@@ -2897,25 +3074,25 @@ const INDUSTRY_OVERVIEWS = {
     topCities: ['北京', '上海', '杭州', '广州', '长沙'],
     hotSkills: ['短视频制作', '内容策略', 'AI创作工具', '直播运营', '社群运营'],
   },
-  '新能源/汽车': {
+  '能源/环保': {
     icon: '🔋',
-    summary: '新能源汽车是中国最具全球竞争力的产业之一。电池、电机、电控、智能驾驶——每个环节都在爆发式增长，人才缺口巨大。',
-    trends: ['智能驾驶(L2+/L3)加速落地', '固态电池/钠离子电池突破', '出海成为主旋律', '飞行汽车/低空经济兴起'],
+    summary: '新能源是中国最具全球竞争力的产业之一。光伏、风电、储能、新能源汽车——每个环节都在爆发式增长，人才缺口巨大。环保产业在"双碳"目标下迎来黄金期。',
+    trends: ['光伏/风电装机持续增长', '储能/氢能技术突破', '碳交易/碳金融兴起', '环保技术(水/固/气)升级'],
     pros: ['国家战略级赛道', '薪资快速增长', '技术含量高', '产业链全球领先'],
-    cons: ['行业洗牌(竞争激烈)', '部分企业加班严重', '制造端工作环境一般', '技术路线存在不确定性'],
+    cons: ['行业洗牌(竞争激烈)', '部分企业加班严重', '制造端工作环境一般', '产能过剩风险'],
     topCities: ['深圳', '上海', '北京', '合肥', '广州', '武汉', '长春'],
-    hotSkills: ['三电系统', '自动驾驶', '功能安全', 'MATLAB/Simulink', 'ROS'],
+    hotSkills: ['光伏/储能技术', '电力系统', '功能安全', 'MATLAB/Simulink', '碳核算'],
   },
-  '游戏/娱乐': {
+  '艺术/娱乐': {
     icon: '🎮',
-    summary: '中国是全球最大的游戏市场。从手游到3A大作，从国内到出海，游戏行业正在从"流量驱动"转向"内容驱动"。',
-    trends: ['精品化/3A化转型', '游戏出海(年增长20%+)', 'AI生成内容(AIGC+游戏)', '云游戏/VR游戏新体验'],
+    summary: '中国是全球最大的游戏市场和增长最快的影视市场之一。从手游到3A大作，从短剧到动画电影，内容行业正在从"流量驱动"转向"内容驱动"。',
+    trends: ['精品化/3A化转型', '游戏出海(年增长20%+)', 'AI生成内容(AIGC+游戏/影视)', '短剧/微短剧爆发式增长'],
     pros: ['做自己喜欢的产品', '项目奖金丰厚', '创意和技术结合', '年轻人文化，氛围轻松'],
     cons: ['版号管制带来不确定性', '加班多(赶版本/上线)', '项目失败率高', '竞争极为激烈'],
     topCities: ['上海', '北京', '深圳', '广州', '杭州', '成都'],
     hotSkills: ['Unity/UE5', '游戏策划', '数值设计', 'AI+游戏', '技术美术(TA)'],
   },
-  '房地产/建筑': {
+  '建筑/房地产': {
     icon: '🏗️',
     summary: '房地产行业经历了深度调整，正从"高周转"模式转向"品质+运营"模式。虽然住宅开发降温，但城市更新、商业运营、REITs等方向仍有空间。',
     trends: ['城市更新/存量改造', '保障性住房建设', '商业地产运营(REITs)', '绿色建筑/低碳转型'],
@@ -2923,6 +3100,15 @@ const INDUSTRY_OVERVIEWS = {
     cons: ['行业处于下行周期', '房企暴雷风险', '加班严重(项目节点)', '政策风险大'],
     topCities: ['上海', '北京', '深圳', '广州', '杭州', '成都'],
     hotSkills: ['BIM技术', '绿色建筑', '项目管理', '投资测算', '资产运营'],
+  },
+  '通信/ICT': {
+    icon: '📡',
+    summary: '通信行业是数字经济的"底座"——5G/6G、光通信、卫星互联网、数据中心等基础设施持续升级，ICT人才需求旺盛。',
+    trends: ['5G-A/6G研发加速', '卫星互联网(星链模式)', '算力网络/东数西算', '光通信/全光网络'],
+    pros: ['基础设施刚需，需求稳定', '技术含量高，壁垒强', '央企/国企机会多(移动/电信/联通)', '标准制定话语权增强'],
+    cons: ['市场增速放缓', '部分岗位集中在特定城市', '设备商竞争激烈', '技术更新换代快'],
+    topCities: ['北京', '深圳', '上海', '南京', '武汉', '成都'],
+    hotSkills: ['5G/通信协议', '网络规划', '光通信', '卫星通信', 'SDN/NFV'],
   },
 };
 
@@ -3008,7 +3194,7 @@ const RESUME_TEMPLATES = [
     avoid: ['避免大段文字描述技术栈，用标签式排列', '避免"精通"二字（除非开源贡献者级别）'],
   },
   {
-    industry: '金融/投资',
+    industry: '金融/银行',
     icon: '💰',
     highlights: [
       'GPA和排名必须写（金融行业极为看重学业成绩）',
@@ -3019,7 +3205,7 @@ const RESUME_TEMPLATES = [
     avoid: ['避免花哨的排版（金融人喜欢干净、规范的格式）', '避免对投资观点的过度吹嘘'],
   },
   {
-    industry: '咨询/四大',
+    industry: '法律/咨询',
     icon: '📊',
     highlights: [
       '一页原则绝对执行，排版极其整洁',
@@ -3030,7 +3216,7 @@ const RESUME_TEMPLATES = [
     avoid: ['避免提到政治/宗教等敏感话题', '避免在简历上展示"创意"（除非是设计岗）'],
   },
   {
-    industry: '快消/零售',
+    industry: '消费品/零售',
     icon: '🛍️',
     highlights: [
       '突出领导力经历（社团/学生会/项目负责人）',
@@ -3041,7 +3227,7 @@ const RESUME_TEMPLATES = [
     avoid: ['避免堆砌技术词汇（快消HR看的是"人"，不是技术）', '避免简历过于技术化而显得"不合群"'],
   },
   {
-    industry: '公务员/事业编',
+    industry: '政府/公共事业',
     icon: '🏛️',
     highlights: [
       '突出政治面貌（党员/预备党员）和学生干部经历',
@@ -3116,4 +3302,175 @@ function searchMajors(query) {
   const q = query.toLowerCase().trim();
   if (!q) return MAJOR_LIST.slice(0, 20);
   return MAJOR_LIST.filter(m => m.toLowerCase().includes(q));
+}
+
+// ── Major → Job matching rules ──────────────
+const MAJOR_JOB_RULES = [
+  { keywords: ['计算机', '软件', '网络空间安全', '信息安全', '物联网'], jobIds: ['frontend-dev','backend-dev','fullstack-dev','android-dev','ios-dev','ai-engineer','data-analyst','devops-engineer','security-engineer','game-dev','blockchain-dev','bigdata-engineer','qa-engineer','network-engineer','data-scientist','customer-success','technical-writer','embedded-engineer'] },
+  { keywords: ['人工智能'], jobIds: ['ai-engineer','data-scientist','bigdata-engineer','backend-dev','data-analyst','quant-analyst','fullstack-dev'] },
+  { keywords: ['数据科学', '大数据'], jobIds: ['data-analyst','data-scientist','bigdata-engineer','ai-engineer','quant-analyst','backend-dev'] },
+  { keywords: ['通信', '电子信息'], jobIds: ['embedded-engineer','network-engineer','electrical-engineer','telecom-engineer','backend-dev','semiconductor-engineer','ai-engineer'] },
+  { keywords: ['自动化'], jobIds: ['embedded-engineer','electrical-engineer','mechanical-engineer','ai-engineer','backend-dev','semiconductor-engineer','automotive-engineer'] },
+  { keywords: ['工商管理', '企业管理', '管理科学', '行政管理', '公共管理'], jobIds: ['management-consultant','hr-specialist','ops-manager','commercial-banker','marketing-manager','gov-civil-servant','ecommerce-ops','supply-chain','real-estate-dev','customer-success'] },
+  { keywords: ['市场营销'], jobIds: ['marketing-manager','ecommerce-ops','ops-manager','advertising-planner','public-relations','sales-engineer','customer-success','management-consultant'] },
+  { keywords: ['会计', '财务管理', '审计'], jobIds: ['accountant','auditor','investment-banker','commercial-banker','financial-advisor','tax-advisor','risk-manager','fintech-pm'] },
+  { keywords: ['人力资源'], jobIds: ['hr-specialist','management-consultant','customer-success','ops-manager','public-relations'] },
+  { keywords: ['国际经济与贸易', '国际贸易'], jobIds: ['supply-chain','commercial-banker','marketing-manager','ecommerce-ops','investment-banker','management-consultant'] },
+  { keywords: ['金融', '经济', '投资', '财政'], jobIds: ['investment-banker','securities-analyst','risk-manager','quant-analyst','commercial-banker','financial-advisor','fintech-pm','vc-pe-analyst','accountant','auditor','tax-advisor','management-consultant'] },
+  { keywords: ['信息管理', '信息系统', '信息管理与信息系统'], jobIds: ['data-analyst','product-manager','backend-dev','ops-manager','bigdata-engineer','management-consultant','fintech-pm'] },
+  { keywords: ['汉语言文学', '汉语言', '中文', '文学'], jobIds: ['journalist','teacher-k12','technical-writer','advertising-planner','public-relations','gov-civil-servant','librarian-archivist','translator'] },
+  { keywords: ['新闻', '传播', '传媒', '广电'], jobIds: ['journalist','advertising-planner','public-relations','marketing-manager','ops-manager','technical-writer'] },
+  { keywords: ['广告'], jobIds: ['advertising-planner','marketing-manager','public-relations','graphic-designer','ui-designer','journalist'] },
+  { keywords: ['英语', '日语', '翻译', '外语', '语言'], jobIds: ['translator','journalist','teacher-k12','supply-chain','commercial-banker','marketing-manager','hospitality-manager','gov-civil-servant'] },
+  { keywords: ['法学', '法律'], jobIds: ['lawyer','patent-agent','gov-civil-servant','auditor','hr-specialist','risk-manager','management-consultant'] },
+  { keywords: ['社会学', '社会工作'], jobIds: ['social-worker','gov-civil-servant','hr-specialist','marketing-manager','management-consultant','public-relations'] },
+  { keywords: ['心理学'], jobIds: ['psychologist','hr-specialist','marketing-manager','management-consultant','product-manager','teacher-k12','social-worker'] },
+  { keywords: ['教育学'], jobIds: ['teacher-k12','university-professor','hr-specialist','management-consultant','gov-civil-servant','librarian-archivist'] },
+  { keywords: ['数学与应用数学', '数学'], jobIds: ['quant-analyst','data-scientist','ai-engineer','data-analyst','securities-analyst','teacher-k12','insurance-actuary','backend-dev','risk-manager'] },
+  { keywords: ['统计'], jobIds: ['data-analyst','data-scientist','quant-analyst','risk-manager','bigdata-engineer','securities-analyst','ai-engineer','insurance-actuary'] },
+  { keywords: ['物理'], jobIds: ['semiconductor-engineer','ai-engineer','quant-analyst','aerospace-engineer','teacher-k12','energy-engineer','telecom-engineer'] },
+  { keywords: ['化学', '化工'], jobIds: ['chemical-analyst','pharma-rd','materials-engineer','food-engineer','environmental-engineer','pharmacist','energy-engineer'] },
+  { keywords: ['机械'], jobIds: ['mechanical-engineer','automotive-engineer','industrial-designer','aerospace-engineer','quality-engineer','sales-engineer','marine-engineer','mining-engineer'] },
+  { keywords: ['电气', '电力'], jobIds: ['electrical-engineer','energy-engineer','embedded-engineer','automotive-engineer','semiconductor-engineer','telecom-engineer'] },
+  { keywords: ['土木', '建筑'], jobIds: ['civil-engineer','architect','urban-planner','real-estate-dev','interior-designer','mining-engineer'] },
+  { keywords: ['材料', '材料科学'], jobIds: ['materials-engineer','semiconductor-engineer','chemical-analyst','mechanical-engineer','aerospace-engineer','automotive-engineer','energy-engineer'] },
+  { keywords: ['能源', '新能源', '能源与动力'], jobIds: ['energy-engineer','automotive-engineer','electrical-engineer','environmental-engineer','materials-engineer','mining-engineer'] },
+  { keywords: ['生物医学', '生物医学工程'], jobIds: ['medical-imaging','biotech-rd','pharma-rd','medical-rep','quality-engineer'] },
+  { keywords: ['环境', '环境工程'], jobIds: ['environmental-engineer','energy-engineer','urban-planner','civil-engineer','gov-civil-servant','chemical-analyst'] },
+  { keywords: ['视觉传达', '视觉传达设计'], jobIds: ['graphic-designer','ui-designer','advertising-planner','animation-artist','fashion-designer','industrial-designer'] },
+  { keywords: ['数字媒体'], jobIds: ['ui-designer','animation-artist','game-dev','graphic-designer','advertising-planner','fashion-designer'] },
+  { keywords: ['工业设计', '产品设计'], jobIds: ['industrial-designer','ui-designer','product-manager','mechanical-engineer','graphic-designer'] },
+  { keywords: ['动画'], jobIds: ['animation-artist','game-dev','graphic-designer','ui-designer','advertising-planner'] },
+  { keywords: ['临床医学', '临床'], jobIds: ['clinical-doctor','medical-imaging','dentist','pharma-rd','nurse','public-health'] },
+  { keywords: ['药学', '药物', '制药'], jobIds: ['pharmacist','pharma-rd','medical-rep','biotech-rd','chemical-analyst'] },
+  { keywords: ['生物技术', '生物信息', '生物工程', '生物', '生命科学'], jobIds: ['biotech-rd','pharma-rd','medical-rep','agricultural-tech','food-engineer','pharmacist'] },
+  { keywords: ['口腔'], jobIds: ['dentist','clinical-doctor','medical-imaging'] },
+  { keywords: ['医学影像'], jobIds: ['medical-imaging','clinical-doctor','biotech-rd'] },
+  { keywords: ['护理', '护士'], jobIds: ['nurse','clinical-doctor','public-health','social-worker'] },
+  { keywords: ['公共卫生', '预防医学'], jobIds: ['public-health','gov-civil-servant','nurse','social-worker'] },
+  { keywords: ['设计', '艺术'], jobIds: ['graphic-designer','ui-designer','industrial-designer','animation-artist','interior-designer','fashion-designer','advertising-planner'] },
+  { keywords: ['音乐', '录音', '音频'], jobIds: ['music-producer','performing-arts','advertising-planner'] },
+  { keywords: ['表演', '戏剧', '影视', '导演', '播音'], jobIds: ['performing-arts','advertising-planner','public-relations','journalist'] },
+  { keywords: ['体育', '运动康复', '运动'], jobIds: ['sports-coach','teacher-k12','nurse','public-relations'] },
+  { keywords: ['酒店', '旅游', '旅游管理', '酒店管理'], jobIds: ['hospitality-manager','marketing-manager','ecommerce-ops','public-relations','customer-success'] },
+  { keywords: ['服装', '纺织', '时尚'], jobIds: ['fashion-designer','graphic-designer','ecommerce-ops','marketing-manager','industrial-designer'] },
+  { keywords: ['船舶', '海洋工程', '海洋'], jobIds: ['marine-engineer','mechanical-engineer','mining-engineer','aerospace-engineer'] },
+  { keywords: ['矿业', '地质', '石油', '采矿'], jobIds: ['mining-engineer','civil-engineer','energy-engineer','environmental-engineer'] },
+  { keywords: ['航空', '航天', '飞行器'], jobIds: ['aerospace-engineer','mechanical-engineer','materials-engineer','electrical-engineer','embedded-engineer'] },
+  { keywords: ['食品', '食品科学', '食品工程'], jobIds: ['food-engineer','agricultural-tech','quality-engineer','chemical-analyst'] },
+  { keywords: ['农业', '农学', '园艺', '植保'], jobIds: ['agricultural-tech','food-engineer','gov-civil-servant','environmental-engineer'] },
+  { keywords: ['电商'], jobIds: ['ecommerce-ops','marketing-manager','ops-manager','supply-chain','customer-success','product-manager'] },
+  { keywords: ['公安', '警察', '刑事', '治安'], jobIds: ['police-officer','gov-civil-servant','lawyer','social-worker'] },
+  { keywords: ['图书', '档案', '情报'], jobIds: ['librarian-archivist','gov-civil-servant','data-analyst','journalist'] },
+  { keywords: ['知识产权'], jobIds: ['patent-agent','lawyer','gov-civil-servant'] },
+  { keywords: ['兽医', '动物医学', '动物科学'], jobIds: ['pet-veterinarian','agricultural-tech','food-engineer','pharma-rd'] },
+  { keywords: ['测绘', '遥感', '地理信息'], jobIds: ['civil-engineer','urban-planner','mining-engineer','environmental-engineer'] },
+  { keywords: ['交通', '交通运输', '物流'], jobIds: ['supply-chain','urban-planner','gov-civil-servant','mechanical-engineer'] },
+  // Expanded major coverage
+  { keywords: ['保险', '保险学'], jobIds: ['insurance-actuary','risk-manager','financial-advisor','commercial-banker'] },
+  { keywords: ['精算'], jobIds: ['insurance-actuary','quant-analyst','risk-manager','data-scientist','securities-analyst'] },
+  { keywords: ['税收', '税务'], jobIds: ['tax-advisor','accountant','auditor','financial-advisor','risk-manager'] },
+  { keywords: ['车辆工程', '车辆'], jobIds: ['automotive-engineer','mechanical-engineer','sales-engineer','industrial-designer','quality-engineer'] },
+  { keywords: ['核工程', '核技术', '核能'], jobIds: ['energy-engineer','electrical-engineer','mechanical-engineer','materials-engineer'] },
+  { keywords: ['测控', '仪器', '仪表'], jobIds: ['embedded-engineer','electrical-engineer','semiconductor-engineer','mechanical-engineer','quality-engineer'] },
+  { keywords: ['城乡规划', '城市规划'], jobIds: ['urban-planner','architect','civil-engineer','gov-civil-servant','real-estate-dev'] },
+  { keywords: ['风景园林', '园林', '景观'], jobIds: ['interior-designer','urban-planner','architect','civil-engineer','environmental-engineer'] },
+  { keywords: ['给排水', '水利', '水文'], jobIds: ['civil-engineer','environmental-engineer','urban-planner','gov-civil-servant'] },
+  { keywords: ['汉语国际教育', '对外汉语'], jobIds: ['teacher-k12','translator','journalist','gov-civil-servant'] },
+  { keywords: ['广播电视', '广播电视学'], jobIds: ['journalist','advertising-planner','performing-arts','public-relations'] },
+  { keywords: ['编辑出版', '出版'], jobIds: ['journalist','technical-writer','librarian-archivist','advertising-planner'] },
+  { keywords: ['学前教育', '幼儿教育'], jobIds: ['teacher-k12','social-worker','sports-coach'] },
+  { keywords: ['特殊教育'], jobIds: ['teacher-k12','social-worker','psychologist','nurse'] },
+  { keywords: ['医学检验', '医学检验技术'], jobIds: ['medical-imaging','biotech-rd','pharma-rd','clinical-doctor','quality-engineer'] },
+  { keywords: ['康复治疗', '康复'], jobIds: ['nurse','public-health','sports-coach','social-worker','clinical-doctor'] },
+  { keywords: ['中医', '中西医'], jobIds: ['pharmacist','clinical-doctor','pharma-rd','biotech-rd','public-health'] },
+  { keywords: ['侦查', '刑事科学', '刑侦'], jobIds: ['police-officer','lawyer','gov-civil-servant'] },
+  { keywords: ['边防', '边防管理'], jobIds: ['police-officer','gov-civil-servant','social-worker'] },
+  { keywords: ['供应链管理', '供应链'], jobIds: ['supply-chain','ecommerce-ops','ops-manager','management-consultant'] },
+  { keywords: ['工程造价'], jobIds: ['civil-engineer','real-estate-dev','architect','urban-planner'] },
+  { keywords: ['工程管理'], jobIds: ['civil-engineer','real-estate-dev','ops-manager','management-consultant','architect'] },
+  // Fallback "其他" categories — broad matching
+  { keywords: ['其他工科'], jobIds: ['mechanical-engineer','electrical-engineer','civil-engineer','embedded-engineer','quality-engineer','sales-engineer','automotive-engineer','materials-engineer'] },
+  { keywords: ['其他理科'], jobIds: ['data-analyst','biotech-rd','chemical-analyst','teacher-k12','data-scientist','environmental-engineer','food-engineer'] },
+  { keywords: ['其他文科'], jobIds: ['journalist','teacher-k12','translator','gov-civil-servant','hr-specialist','public-relations','social-worker','librarian-archivist'] },
+  { keywords: ['其他商科'], jobIds: ['marketing-manager','commercial-banker','hr-specialist','ops-manager','ecommerce-ops','customer-success','management-consultant','financial-advisor'] },
+];
+
+// ── Get job IDs matching a major ────────────
+function getJobIdsForMajor(majorName) {
+  if (!majorName) return [];
+  const m = majorName.toLowerCase().trim();
+  const matched = new Set();
+  for (const rule of MAJOR_JOB_RULES) {
+    for (const kw of rule.keywords) {
+      if (m.includes(kw.toLowerCase())) {
+        rule.jobIds.forEach(id => matched.add(id));
+        break; // one keyword match = whole rule applies
+      }
+    }
+  }
+  return [...matched];
+}
+
+// ── Get full job objects matching a major ────
+function getJobsForMajor(majorName) {
+  const ids = getJobIdsForMajor(majorName);
+  return ids.map(id => getJobById(id)).filter(Boolean);
+}
+
+// ── AI Fallback: major → job matching ────────
+async function getJobIdsForMajorAI(majorName) {
+  const jobList = JOB_DATABASE.map(j => `"${j.id}" (${j.title} - ${j.industry})`).join('\n');
+  const userPrompt = `我的专业是「${majorName}」。请根据这个专业，从以下岗位列表中选出最对口的 5-8 个岗位。\n\n全部岗位：\n${jobList}\n\n请只返回一个 JSON 数组，格式如 ["job-id-1","job-id-2"]，不要其他内容。`;
+  const systemPrompt = '你是一个大学生职业规划专家。根据用户输入的专业名称，从提供的岗位列表中选出与这个专业最匹配的岗位。只返回 JSON 数组。';
+
+  const raw = await callAI(systemPrompt, userPrompt, 1024);
+  if (!raw) return [];
+
+  try {
+    const arr = JSON.parse(raw.match(/\[[\s\S]*\]/)?.[0] || '[]');
+    const validIds = new Set(JOB_DATABASE.map(j => j.id));
+    return arr.filter(id => validIds.has(id));
+  } catch {
+    // Also try extracting job IDs with regex
+    const matches = raw.match(/"([a-z][a-z-]+)"/g);
+    if (!matches) return [];
+    const validIds = new Set(JOB_DATABASE.map(j => j.id));
+    return matches.map(m => m.replace(/"/g, '')).filter(id => validIds.has(id));
+  }
+}
+
+// ── AI: Career recommendation interpretation ──
+async function generateCareerInterpretation(userProfile, topJobs) {
+  const { mbtiType, mbtiScores, profile, willingness, quizSummary } = userProfile;
+
+  const jobText = topJobs.map((r, i) =>
+    `${i + 1}. ${r.job.title}（${r.job.industry}）— 匹配度 ${r.percent}%\n   简介：${r.job.description}\n   适合：${r.job.personality}`
+  ).join('\n\n');
+
+  const systemPrompt = `你是一个资深的职业规划顾问，擅长根据MBTI性格、专业背景和个人偏好解读职业推荐结果。你的解读温暖、专业、有洞察力，像一位了解你的导师在给你建议。字数控制在150字左右。`;
+
+  const userPrompt = `以下是一位大学生的完整画像和AI推荐结果，请写一段150字左右的个性化解读：
+
+【性格类型】${mbtiType}
+【性格维度得分】外向/内向(E/I): ${mbtiScores.IE}, 理性/感性(T/F): ${mbtiScores.TF}, 计划/随性(J/P): ${mbtiScores.JP}, 创新/务实(N/S): ${mbtiScores.SN}
+【专业】${profile.major || '未填写'}
+【技能】${(profile.skills || []).join('、') || '未填写'}
+【意向行业】${(willingness?.industries || []).join('、') || '不限'}
+【优先考量】${(willingness?.priorities || []).join('、') || '未指定'}
+【薪资期望】${willingness?.salary || '不限'}
+【16道测评题特征摘要】${quizSummary || '已完成测评'}
+
+【Top ${topJobs.length} 推荐岗位】
+${jobText}
+
+请写一段150字左右的个性化解读，包括：
+1. 你的性格和专业组合有什么独特优势
+2. 为什么这几个岗位特别适合你
+3. 未来发展中需要注意或补充什么
+
+语气温暖但不谄媚，直接但有温度。不用"亲爱的同学"这类套话。`;
+
+  const reply = await callAI(systemPrompt, userPrompt, 512);
+  return reply || '';
 }

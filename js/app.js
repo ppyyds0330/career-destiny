@@ -351,6 +351,7 @@ function renderZ1_Profile(container) {
         <label class="form-label">专业</label>
         <input class="form-input" id="inputMajor" placeholder="输入专业名称，支持模糊搜索" value="${STATE.profile.major || ''}" autocomplete="off">
         <div id="majorSuggestions" style="margin-top:4px;max-height:140px;overflow-y:auto;display:none;"></div>
+        <div id="majorMatchedJobs" style="display:none;"></div>
       </div>
 
       <div class="form-group">
@@ -395,13 +396,45 @@ function renderZ1_Profile(container) {
   // Major autocomplete
   const majorInput = document.getElementById('inputMajor');
   const suggestionsDiv = document.getElementById('majorSuggestions');
+  const matchedDiv = document.getElementById('majorMatchedJobs');
+
+  const renderMatchedJobs = (majorName) => {
+    const jobs = getJobsForMajor(majorName);
+    if (!jobs.length) {
+      matchedDiv.style.display = 'none';
+      return;
+    }
+    matchedDiv.style.display = 'block';
+    matchedDiv.innerHTML = `
+      <div style="margin-top:14px;padding:16px;background:rgba(200,169,110,0.05);border:1px solid rgba(200,169,110,0.18);border-radius:4px;">
+        <div style="font-size:0.78rem;color:var(--gold);letter-spacing:0.06em;margin-bottom:10px;">
+          ◆ 该专业对口岗位（${jobs.length}个）
+          <span style="font-size:0.65rem;color:var(--text-dim);">—— 系统将据此优化推荐结果</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${jobs.map(j => `
+            <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;font-size:0.72rem;color:#b0a088;background:rgba(200,169,110,0.08);border:1px solid rgba(200,169,110,0.12);border-radius:3px;white-space:nowrap;">
+              <span>${j.icon || '📋'}</span>${j.title}
+            </span>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  };
+
+  // Show matched jobs on page load if major already saved
+  if (STATE.profile.major) {
+    renderMatchedJobs(STATE.profile.major);
+  }
+
   majorInput.addEventListener('input', () => {
     const query = majorInput.value.trim();
+    matchedDiv.style.display = 'none';
     if (query.length < 1) { suggestionsDiv.style.display = 'none'; return; }
     const results = searchMajors(query);
     if (results.length > 0) {
       suggestionsDiv.innerHTML = results.map(m =>
-        `<div style="padding:8px 14px;cursor:pointer;font-size:0.85rem;color:#b0a088;border-bottom:1px solid rgba(255,255,255,0.03);" onmousedown="event.preventDefault();document.getElementById('inputMajor').value='${m}';document.getElementById('majorSuggestions').style.display='none';">${m}</div>`
+        `<div style="padding:8px 14px;cursor:pointer;font-size:0.85rem;color:#b0a088;border-bottom:1px solid rgba(255,255,255,0.03);" onmousedown="event.preventDefault();document.getElementById('inputMajor').value='${m}';document.getElementById('majorSuggestions').style.display='none';renderMatchedJobs('${m}');">${m}</div>`
       ).join('');
       suggestionsDiv.style.display = 'block';
       suggestionsDiv.style.background = 'rgba(20,20,35,0.98)';
@@ -412,11 +445,17 @@ function renderZ1_Profile(container) {
     }
   });
   majorInput.addEventListener('blur', () => {
-    setTimeout(() => { suggestionsDiv.style.display = 'none'; }, 200);
+    setTimeout(() => {
+      suggestionsDiv.style.display = 'none';
+      const val = majorInput.value.trim();
+      if (val && MAJOR_LIST.includes(val)) {
+        renderMatchedJobs(val);
+      }
+    }, 200);
   });
 }
 
-function Z1_saveProfile() {
+async function Z1_saveProfile() {
   const grade = document.getElementById('inputGrade').value;
   const major = document.getElementById('inputMajor').value.trim();
 
@@ -432,7 +471,17 @@ function Z1_saveProfile() {
     industries.push(b.dataset.industry);
   });
 
-  STATE.profile = { grade, major, skills, targetIndustries: industries };
+  // Rule-based matching first, AI fallback if empty
+  let matchedJobIds = getJobIdsForMajor(major);
+  if (matchedJobIds.length === 0) {
+    showToast('正在用 AI 分析你的专业...');
+    matchedJobIds = await getJobIdsForMajorAI(major);
+    if (matchedJobIds.length > 0) {
+      showToast(`AI 已匹配 ${matchedJobIds.length} 个相关岗位`);
+    }
+  }
+
+  STATE.profile = { grade, major, skills, targetIndustries: industries, matchedJobIds };
   saveState();
   Z1_nextStep(4);
 }
@@ -542,7 +591,7 @@ function Z1_movePriority(pid, direction) {
   renderZ1_Willingness(document.getElementById('zone1'));
 }
 
-function Z1_saveWillingness() {
+async function Z1_saveWillingness() {
   const industries = [];
   document.querySelectorAll('#wIndustryTags .tag-chip.selected').forEach(b => {
     industries.push(b.dataset.ind);
@@ -555,7 +604,54 @@ function Z1_saveWillingness() {
 
   // Compute recommendations
   computeRecommendations();
+
+  // Generate AI interpretation (non-blocking)
+  const recs = STATE.recommendations;
+  if (recs && recs.all && recs.all.length > 0) {
+    const quizSummary = buildQuizSummary();
+    const userProfile = {
+      mbtiType: recs.mbtiType,
+      mbtiScores: STATE.mbtiScores,
+      profile: STATE.profile,
+      willingness: STATE.willingness,
+      quizSummary,
+    };
+    const topForAI = recs.all.slice(0, 3);
+    generateCareerInterpretation(userProfile, topForAI).then(interpretation => {
+      if (interpretation) {
+        STATE.recommendations.aiInterpretation = interpretation;
+        saveState();
+        // Refresh results if already visible
+        const container = document.getElementById('zone1');
+        if (container && document.getElementById('aiInterpretation')) {
+          const aiDiv = document.getElementById('aiInterpretation');
+          aiDiv.querySelector('.ai-interp-text').textContent = interpretation;
+          aiDiv.querySelector('.ai-interp-loading').style.display = 'none';
+          aiDiv.querySelector('.ai-interp-content').style.display = 'block';
+        }
+      }
+    });
+  }
+
   Z1_nextStep(5);
+}
+
+function buildQuizSummary() {
+  const answers = STATE.quizAnswers || [];
+  if (answers.length === 0) return '';
+  // Pick 4 representative answers for the AI prompt
+  const highlights = answers
+    .filter(a => a.effects && Object.values(a.effects).some(v => Math.abs(v) >= 2))
+    .slice(0, 4);
+  const questions = {};
+  highlights.forEach(a => {
+    const q = QUIZ_QUESTIONS.find(qq => qq.id === a.questionId);
+    if (q) {
+      const choice = q.choices[a.choiceIndex];
+      questions[q.text] = choice ? choice.text : '';
+    }
+  });
+  return Object.entries(questions).map(([q, a]) => `「${q}」→ ${a}`).join('；') || '已完成全部测评';
 }
 
 // ── Recommendation Engine ────────────────────
@@ -595,43 +691,15 @@ function computeRecommendations() {
     // Background match (0-20)
     const bgScore = (() => {
       let s = 10;
-      const major = (profile.major || '').toLowerCase();
-      const skills = (profile.skills || []).map(sk => sk.toLowerCase());
+      const matchedIds = profile.matchedJobIds || [];
 
-      // Major-job keyword matching
-      if ((job.id === 'frontend-dev' || job.id === 'backend-dev' || job.id === 'ai-engineer') &&
-          (major.includes('计算机') || major.includes('软件') || major.includes('人工智能') || major.includes('数据'))) s += 6;
-      if ((job.id === 'data-analyst') && (major.includes('统计') || major.includes('数学') || major.includes('数据') || major.includes('计算机'))) s += 6;
-      if ((job.id === 'investment-analyst') && (major.includes('金融') || major.includes('经济') || major.includes('会计'))) s += 6;
-      if ((job.id === 'product-manager' || job.id === 'product-operations') && (major.includes('管理') || major.includes('市场') || major.includes('计算机'))) s += 5;
-      if ((job.id === 'consulting-analyst') && (major.includes('管理') || major.includes('经济') || major.includes('金融'))) s += 5;
-      if ((job.id === 'civil-service') && (major.includes('行政') || major.includes('法学') || major.includes('政治') || major.includes('公共'))) s += 5;
-      if ((job.id === 'marketing-brand') && (major.includes('市场') || major.includes('广告') || major.includes('传媒') || major.includes('新闻'))) s += 5;
-      if ((job.id === 'hr-specialist') && (major.includes('人力') || major.includes('心理') || major.includes('管理'))) s += 5;
-      if ((job.id === 'game-planner') && (major.includes('计算机') || major.includes('设计') || major.includes('数字媒体'))) s += 5;
-      if ((job.id === 'new-media') && (major.includes('新闻') || major.includes('传媒') || major.includes('广告') || major.includes('中文'))) s += 5;
-      if ((job.id === 'management-trainee') && (major.includes('管理') || major.includes('市场') || major.includes('经济'))) s += 4;
-      // New jobs matching
-      if ((job.id === 'ux-ui-designer') && (major.includes('设计') || major.includes('数字媒体') || major.includes('计算机'))) s += 6;
-      if ((job.id === 'sre-devops' || job.id === 'security-engineer') && (major.includes('计算机') || major.includes('软件') || major.includes('网络') || major.includes('信息安全'))) s += 6;
-      if ((job.id === 'embedded-engineer') && (major.includes('电子') || major.includes('自动化') || major.includes('计算机') || major.includes('通信'))) s += 6;
-      if ((job.id === 'quantitative-analyst') && (major.includes('数学') || major.includes('统计') || major.includes('金融') || major.includes('计算机'))) s += 6;
-      if ((job.id === 'accountant-auditor') && (major.includes('会计') || major.includes('财务') || major.includes('审计') || major.includes('金融'))) s += 6;
-      if ((job.id === 'teacher') && (major.includes('教育') || major.includes('中文') || major.includes('数学') || major.includes('英语') || major.includes('物理'))) s += 5;
-      if ((job.id === 'test-qa-engineer' || job.id === 'bi-engineer') && (major.includes('计算机') || major.includes('软件') || major.includes('数据') || major.includes('统计'))) s += 5;
-      if ((job.id === 'ecommerce-ops') && (major.includes('电商') || major.includes('市场') || major.includes('管理') || major.includes('计算机'))) s += 5;
-      if ((job.id === 'medical-pharma-sales') && (major.includes('药学') || major.includes('临床') || major.includes('生物') || major.includes('医学'))) s += 6;
-      if ((job.id === 'automobile-engineer') && (major.includes('车辆') || major.includes('机械') || major.includes('自动化') || major.includes('电子') || major.includes('能源'))) s += 6;
-      if ((job.id === 'legal-professional') && (major.includes('法学') || major.includes('法律'))) s += 6;
-      if ((job.id === 'customer-success') && (major.includes('管理') || major.includes('市场') || major.includes('计算机') || major.includes('经济'))) s += 4;
-      if ((job.id === 'content-editor') && (major.includes('新闻') || major.includes('中文') || major.includes('传媒') || major.includes('文学'))) s += 5;
-      if ((job.id === 'architect-designer') && (major.includes('建筑') || major.includes('规划') || major.includes('设计') || major.includes('土木'))) s += 6;
-      if ((job.id === 'real-estate-planning') && (major.includes('房地产') || major.includes('管理') || major.includes('经济') || major.includes('建筑'))) s += 5;
-      if ((job.id === 'translator-localization') && (major.includes('英语') || major.includes('日语') || major.includes('翻译') || major.includes('外语'))) s += 6;
-      if ((job.id === 'risk-manager') && (major.includes('金融') || major.includes('数学') || major.includes('统计') || major.includes('经济'))) s += 6;
-      if ((job.id === 'sales-engineer') && (major.includes('计算机') || major.includes('电子') || major.includes('机械') || major.includes('自动化'))) s += 5;
+      // Major-matched job boost (from MAJOR_JOB_RULES)
+      if (matchedIds.includes(job.id)) {
+        s += 8;
+      }
 
       // Skill matching
+      const skills = (profile.skills || []).map(sk => sk.toLowerCase());
       job.skills.forEach(sk => {
         if (skills.some(us => sk.name.toLowerCase().includes(us) || us.includes(sk.name.toLowerCase().split('/')[0]))) s += 2;
       });
@@ -719,6 +787,25 @@ function renderZ1_Results(container) {
 
       <div class="section-title" style="font-size:1.3rem;">你的专属推荐</div>
       <div class="section-subtitle">性格类型：${mbtiType} · 综合匹配分析</div>
+
+      ${(() => {
+        const aiCfg = getAiConfig();
+        const aiReady = !!(aiCfg.apiKey && aiCfg.provider);
+        if (!aiReady && !recs.aiInterpretation) return '';
+        const showLoading = !recs.aiInterpretation;
+        const showContent = !!recs.aiInterpretation;
+        return `
+        <div id="aiInterpretation" style="margin:16px 0;padding:16px 18px;background:rgba(180,160,120,0.04);border:1px solid rgba(200,169,110,0.15);border-radius:3px;">
+          <div class="ai-interp-loading" style="display:${showLoading ? 'flex' : 'none'};align-items:center;gap:8px;font-size:0.78rem;color:var(--text-dim);">
+            <span class="ai-dot-pulse" style="width:6px;height:6px;background:var(--gold);border-radius:50%;animation:dotPulse 1.4s infinite;"></span>
+            AI 正在为你解读推荐结果...
+          </div>
+          <div class="ai-interp-content" style="display:${showContent ? 'block' : 'none'};">
+            <div style="font-size:0.7rem;color:var(--gold-dim);letter-spacing:0.06em;margin-bottom:8px;">◆ AI 个性化解读</div>
+            <p class="ai-interp-text" style="font-size:0.82rem;color:#c8bcb0;line-height:1.85;letter-spacing:0.04em;margin:0;">${recs.aiInterpretation || ''}</p>
+          </div>
+        </div>`;
+      })()}
 
       <div id="resultContent"></div>
 

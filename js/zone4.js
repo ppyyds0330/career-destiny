@@ -184,31 +184,6 @@ function updateResumeScore(savedChecks) {
 //  AI Resume Analysis Functions
 // ══════════════════════════════════════════════
 
-const AI_PROVIDERS = {
-  deepseek:   { name:'DeepSeek',       endpoint:'https://api.deepseek.com/v1/chat/completions',                    model:'deepseek-chat',     format:'openai', desc:'性价比极高，国内直达' },
-  qwen:       { name:'阿里通义千问',     endpoint:'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model:'qwen-plus',         format:'openai', desc:'阿里云出品，中文理解强' },
-  moonshot:   { name:'月之暗面 Kimi',    endpoint:'https://api.moonshot.cn/v1/chat/completions',                    model:'moonshot-v1-8k',    format:'openai', desc:'长文本处理出色' },
-  glm:        { name:'智谱 ChatGLM',    endpoint:'https://open.bigmodel.cn/api/paas/v4/chat/completions',           model:'glm-4',             format:'openai', desc:'清华系，学术背景扎实' },
-  doubao:     { name:'字节豆包',         endpoint:'https://ark.cn-beijing.volces.com/api/v3/chat/completions',       model:'doubao-pro-32k',    format:'openai', desc:'字节跳动旗下' },
-  anthropic:  { name:'Anthropic Claude',endpoint:'https://api.anthropic.com/v1/messages',                            model:'claude-sonnet-4-6', format:'anthropic', desc:'最强分析能力，需海外访问' },
-  custom:     { name:'自定义接口',        endpoint:'',                                                               model:'',                  format:'openai', desc:'填入任意 OpenAI 兼容接口' }
-};
-
-function getAiConfig() {
-  // Migrate old key to new storage
-  const oldKey = localStorage.getItem('cd-claude-api-key');
-  if (oldKey && !localStorage.getItem('cd-ai-api-key')) {
-    localStorage.setItem('cd-ai-api-key', oldKey);
-    localStorage.setItem('cd-ai-provider', 'anthropic');
-    localStorage.removeItem('cd-claude-api-key');
-  }
-  const provider = localStorage.getItem('cd-ai-provider') || '';
-  const apiKey = localStorage.getItem('cd-ai-api-key') || '';
-  const model = localStorage.getItem('cd-ai-model') || '';
-  const endpoint = localStorage.getItem('cd-ai-endpoint') || '';
-  return { provider, apiKey, model, endpoint };
-}
-
 function showApiKeyModal() {
   const existing = document.querySelector('.api-modal-overlay');
   if (existing) existing.remove();
