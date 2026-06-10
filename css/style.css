@@ -1321,3 +1321,84 @@ body {
 @keyframes petRipple {
   to { width: 80px; height: 80px; opacity: 0; }
 }
+
+/* ══════════════════════════════════════════════
+   Zone 4 — 面试军械库
+   ══════════════════════════════════════════════ */
+
+/* Sub-tabs */
+.z4-tab {
+  padding: 9px 22px;
+  border: 1px solid rgba(200,169,110,0.18);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.z4-tab:hover {
+  border-color: rgba(200,169,110,0.4);
+  color: #b0a590;
+}
+
+.z4-tab.active {
+  border-color: var(--gold);
+  background: rgba(200,169,110,0.1);
+  color: var(--gold-light);
+}
+
+/* Question filter buttons */
+.q-filter {
+  padding: 6px 16px;
+  border: 1px solid rgba(200,169,110,0.15);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.q-filter:hover {
+  border-color: rgba(200,169,110,0.4);
+  color: #b0a088;
+}
+
+.q-filter.active {
+  border-color: var(--gold);
+  background: rgba(200,169,110,0.12);
+  color: var(--gold-light);
+}
+
+/* Q card hover */
+.q-card:hover {
+  border-color: rgba(200,169,110,0.3) !important;
+  background: rgba(200,169,110,0.02) !important;
+}
+
+/* Resume checkbox */
+.resume-check-row:hover .resume-checkbox {
+  border-color: var(--gold) !important;
+}
+
+/* Mock interview timer pulse */
+#countdownTimer {
+  transition: color 0.5s ease, transform 0.3s ease;
+}
+
+/* Eval button hover */
+.eval-btn:hover {
+  border-color: rgba(200,169,110,0.5) !important;
+  color: #b0a088 !important;
+}
+
+/* Group case card hover */
+.group-case-card:hover {
+  border-color: rgba(200,169,110,0.3) !important;
+}

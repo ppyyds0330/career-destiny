@@ -73,6 +73,7 @@ function switchZone(zoneId) {
   if (zoneId === 'zone1') renderZone1();
   if (zoneId === 'zone2') renderZone2();
   if (zoneId === 'zone3') renderZone3();
+  if (zoneId === 'zone4') renderZone4();
 
   updateNavBadge();
   saveState();
